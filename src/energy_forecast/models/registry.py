@@ -67,8 +67,9 @@ def get_model(name: str, target: str, X_cols, random_state: int = 42, quantile: 
                              RidgeCV(alphas=np.logspace(-2, 3, 12)))
     if name == "random_forest":
         return make_pipeline(SimpleImputer(strategy="median"),
-                             RandomForestRegressor(n_estimators=200, min_samples_leaf=5, max_features=0.5,
-                                                   n_jobs=-1, random_state=random_state))
+                             # max_samples bootstraps 30% of rows per tree: ~3x faster, similar accuracy
+                             RandomForestRegressor(n_estimators=150, min_samples_leaf=5, max_features=0.33,
+                                                   max_samples=0.3, n_jobs=-1, random_state=random_state))
     if name == "lightgbm":
         import lightgbm as lgb
 
