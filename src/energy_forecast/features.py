@@ -28,12 +28,12 @@ def _calendar(index: pd.DatetimeIndex, tz: str) -> pd.DataFrame:
     be_holidays = holidays.Belgium(years=years)
     out = pd.DataFrame(index=index)
     out["hour"] = loc.hour
-    out["dow"] = loc.dayofweek
+    out["dow"] = loc.day_of_week
     out["month"] = loc.month
-    out["is_weekend"] = (loc.dayofweek >= 5).astype(int)
+    out["is_weekend"] = (loc.day_of_week >= 5).astype(int)
     out["is_holiday"] = np.array([d in be_holidays for d in loc.date], dtype=int)
-    out["doy_sin"] = np.sin(2 * np.pi * loc.dayofyear / 365.25)
-    out["doy_cos"] = np.cos(2 * np.pi * loc.dayofyear / 365.25)
+    out["doy_sin"] = np.sin(2 * np.pi * loc.day_of_year / 365.25)
+    out["doy_cos"] = np.cos(2 * np.pi * loc.day_of_year / 365.25)
     out["hour_sin"] = np.sin(2 * np.pi * loc.hour / 24)
     out["hour_cos"] = np.cos(2 * np.pi * loc.hour / 24)
     return out

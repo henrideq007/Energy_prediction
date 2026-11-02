@@ -16,8 +16,8 @@ def make_synthetic(start: str = "2022-01-01", end: str = "2025-12-31", seed: int
     n = len(idx)
     loc = idx.tz_convert("Europe/Brussels")
     hour = loc.hour.to_numpy()
-    doy = loc.dayofyear.to_numpy()
-    dow = loc.dayofweek.to_numpy()
+    doy = loc.day_of_year.to_numpy()
+    dow = loc.day_of_week.to_numpy()
     season = np.cos(2 * np.pi * (doy - 15) / 365.25)  # +1 winter, -1 summer
 
     temp = 11 - 8 * season + 4 * np.sin(2 * np.pi * (hour - 9) / 24) + rng.normal(0, 2.5, n)

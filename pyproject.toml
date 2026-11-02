@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,7 @@ description = "Day-ahead (24h) electricity price and production forecasting for 
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Henri Dequenne" }]
-license = { text = "MIT" }
+license = "MIT"
 dependencies = [
   "pandas>=2.1",
   "numpy>=1.26",
