@@ -1,0 +1,39 @@
+{
+  "n_rows": 35064,
+  "start": "2022-01-01 00:00:00+00:00",
+  "end": "2025-12-31 23:00:00+00:00",
+  "missing_timestamps": 0,
+  "duplicate_timestamps": 0,
+  "missing_pct": {
+    "price_da": 0.0,
+    "price_da_FR": 0.0,
+    "price_da_NL": 0.0,
+    "price_da_DE_LU": 0.0,
+    "load_actual": 0.0,
+    "load_forecast": 0.0,
+    "gen_solar": 0.0,
+    "gen_wind": 0.008555783709787816,
+    "gen_nuclear": 0.0,
+    "gen_gas": 0.0,
+    "gen_total": 0.0,
+    "fc_solar": 0.0,
+    "fc_wind": 0.0,
+    "fc_gen_total": 0.0,
+    "w_brussels_temperature_2m": 0.0,
+    "w_brussels_wind_speed_10m": 0.0,
+    "w_brussels_shortwave_radiation": 0.0,
+    "w_brussels_cloud_cover": 0.0,
+    "w_offshore_wind_zone_wind_speed_10m": 0.0,
+    "ttf_gas": 0.0,
+    "eua_carbon": 0.0,
+    "flag_price_spike": 0.0
+  },
+  "out_of_bounds": {},
+  "interpolated": {
+    "load_actual": 40,
+    "gen_wind": 3
+  },
+  "flagged_spikes": 557,
+  "negative_price_hours": 775,
+  "dropped_constant_cols": []
+}
