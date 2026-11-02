@@ -1,0 +1,3 @@
+# Install everything (core + explainability + API + dev tools):
+#   pip install -r requirements.txt
+-e .[explain,api,dev]

@@ -1,0 +1,29 @@
+# Phase 5 (optional): produce tomorrow's forecast every day in the cloud.
+# 1. Add the repository secret ENTSOE_API_KEY (Settings > Secrets and variables > Actions)
+# 2. Commit trained models or add a training step
+# 3. Uncomment the schedule below
+name: Daily forecast
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "17 8 * * *"   # 08:17 UTC = ~10:00 Brussels, before the 12:00 auction
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Forecast
+        env:
+          ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
+        run: python -m energy_forecast predict
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forecast
+          path: forecasts/

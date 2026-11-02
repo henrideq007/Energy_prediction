@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    { "name": "Demo (synthetic data)", "type": "debugpy", "request": "launch", "module": "energy_forecast", "args": ["demo"], "cwd": "${workspaceFolder}" },
+    { "name": "Fetch data", "type": "debugpy", "request": "launch", "module": "energy_forecast", "args": ["-v", "fetch"], "cwd": "${workspaceFolder}" },
+    { "name": "Validate", "type": "debugpy", "request": "launch", "module": "energy_forecast", "args": ["validate"], "cwd": "${workspaceFolder}" },
+    { "name": "Backtest", "type": "debugpy", "request": "launch", "module": "energy_forecast", "args": ["-v", "backtest"], "cwd": "${workspaceFolder}" },
+    { "name": "Predict tomorrow", "type": "debugpy", "request": "launch", "module": "energy_forecast", "args": ["predict"], "cwd": "${workspaceFolder}" },
+    { "name": "API (uvicorn)", "type": "debugpy", "request": "launch", "module": "uvicorn", "args": ["api.app:app", "--reload"], "cwd": "${workspaceFolder}" }
+  ]
+}

@@ -1,0 +1,28 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Data & artefacts (regenerable — keep the repo light)
+data/raw/*
+data/processed/*
+data/external/*
+!data/**/.gitkeep
+models/*
+!models/.gitkeep
+forecasts/*
+!forecasts/.gitkeep
+reports/*.parquet
+reports/cache/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini

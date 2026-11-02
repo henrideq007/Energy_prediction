@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------
+# Energy Price & Production Forecasting — Belgium (BE bidding zone)
+# Every key here is read by src/energy_forecast/config.py.
+# Change values here rather than in code, and log important changes in
+# docs/DECISIONS.md + the Notion "Decision Log".
+# ---------------------------------------------------------------------------
+
+project:
+  name: energy-price-prediction
+  timezone: Europe/Brussels        # all user-facing outputs in local time
+  bidding_zone: BE                 # ENTSO-E area code (entsoe-py)
+  neighbours: [FR, NL, DE_LU]      # cross-border price features
+  start: "2019-01-01"              # history start (UTC date)
+  end: null                        # null = today
+  resolution: "1h"                 # 15-min SDAC prices (since 2025-10-01) are averaged to hourly
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  external_dir: data/external
+  models_dir: models
+  reports_dir: reports
+  forecasts_dir: forecasts
+
+entsoe:
+  chunk_months: 3                  # size of each API request window
+  request_sleep_s: 0.5             # be polite with the API
+
+weather:
+  # archive            -> ERA5 reanalysis (observed weather; optimistic for backtests)
+  # historical_forecast -> archived NWP forecasts (realistic, available ~2022+)
+  source: archive
+  variables: [temperature_2m, wind_speed_10m, shortwave_radiation, cloud_cover]
+  locations:                       # name: [lat, lon]
+    brussels: [50.85, 4.35]
+    antwerp: [51.22, 4.40]
+    liege: [50.63, 5.57]
+    offshore_wind_zone: [51.60, 2.90]   # Belgian North Sea concession area (approx.)
+
+commodities:
+  enabled: true
+  ttf_ticker: "TTF=F"              # Dutch TTF gas front-month (Yahoo Finance via yfinance)
+  eua_csv: data/external/eua_prices.csv   # optional manual CSV: columns date,price
+  publication_lag_days: 2          # close of D-2 is the latest known at D-1 10:00
+
+elia:
+  enabled: false                   # ENTSO-E already covers BE; Elia adds finer detail
+  base_url: https://opendata.elia.be/api/explore/v2.1/catalog/datasets
+  datasets: {}                     # e.g. {solar_elia: ods032} — verify IDs on opendata.elia.be
+
+forecast:
+  issue_hour_local: 10             # forecast issued on D-1 at 10:00 (before 12:00 SDAC gate closure)
+  horizon_hours: 24
+  min_lag_actuals_h: 48            # actual load/generation for D-1 afternoon is NOT known at issue time
+  min_lag_prices_h: 24             # D-1 day-ahead prices are known (auction on D-2)
+
+targets:
+  price: price_da
+  production: [gen_total, gen_solar, gen_wind]
+
+split:
+  val_start: "2024-07-01"
+  test_start: "2025-01-01"
+  backtest:
+    first_test_month: "2025-01"
+    n_folds: 12                    # monthly folds, expanding window
+    refit_every_fold: true
+
+models:
+  price: [naive_day, seasonal_naive_week, ridge, random_forest, lightgbm, xgboost]
+  production: [naive_day, seasonal_naive_week, tso_forecast, ridge, lightgbm, xgboost]
+  quantiles: [0.1, 0.5, 0.9]       # prediction intervals for the final price model
+
+random_state: 42
