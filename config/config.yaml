@@ -30,7 +30,7 @@ weather:
   # archive            -> ERA5 reanalysis (observed weather; optimistic for backtests)
   # historical_forecast -> archived NWP forecasts (realistic, available ~2022+)
   source: archive
-  variables: [temperature_2m, wind_speed_10m, shortwave_radiation, cloud_cover]
+  variables: [temperature_2m, wind_speed_100m, shortwave_radiation, cloud_cover]   # 100 m = turbine hub height (DP-020)
   locations:                       # name: [lat, lon]
     brussels: [50.85, 4.35]
     antwerp: [51.22, 4.40]
@@ -40,6 +40,7 @@ weather:
 commodities:
   enabled: true
   ttf_ticker: "TTF=F"              # Dutch TTF gas front-month (Yahoo Finance via yfinance)
+  ttf_csv: data/external/ttf_prices.csv   # fallback / gap filler if Yahoo returns nothing: columns date,price (EUR/MWh)
   eua_csv: data/external/eua_prices.csv   # optional manual CSV: columns date,price
   publication_lag_days: 2          # close of D-2 is the latest known at D-1 10:00
 
@@ -59,10 +60,10 @@ targets:
   production: [gen_total, gen_solar, gen_wind]
 
 split:
-  val_start: "2024-07-01"
-  test_start: "2025-01-01"
+  val_start: "2025-05-01"
+  test_start: "2025-11-01"
   backtest:
-    first_test_month: "2025-01"
+    first_test_month: "2025-11"    # last 12 months: Nov 2025 -> Oct 2026 (15-min MTU era + 2026 nuclear outage)
     n_folds: 12                    # monthly folds, expanding window
     refit_every_fold: true
 

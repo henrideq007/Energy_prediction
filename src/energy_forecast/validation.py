@@ -70,6 +70,18 @@ def _bounds(col: str) -> tuple[float, float] | None:
     return None
 
 
+def interpolate_short_gaps(s: pd.Series, max_gap: int) -> pd.Series:
+    """Time-interpolate only the gaps of at most `max_gap` consecutive missing values (inside the series)."""
+    na = s.isna()
+    if not na.any():
+        return s
+    run_id = (na != na.shift()).cumsum()
+    run_len = na.groupby(run_id).transform("size")
+    short = na & (run_len <= max_gap)
+    interp = s.interpolate(method="time", limit_area="inside")
+    return s.where(~short, interp)
+
+
 def clean_and_validate(df: pd.DataFrame, price_col: str = "price_da") -> tuple[pd.DataFrame, ValidationReport]:
     rep = ValidationReport()
     df = df.copy()
@@ -99,11 +111,12 @@ def clean_and_validate(df: pd.DataFrame, price_col: str = "price_da") -> tuple[p
             rep.out_of_bounds[c] = int(mask.sum())
             df.loc[mask, c] = np.nan
 
-    # 4. Interpolate only short gaps (<= 3h). Long gaps stay NaN (models handle / rows dropped)
+    # 4. Interpolate only short gaps (<= 3h). Long gaps stay ENTIRELY NaN (models handle / rows dropped).
+    #    Note: pandas' `limit=` alone would also fill the first 3 hours of every long gap.
     for c in df.columns:
-        before = df[c].isna().sum()
-        df[c] = df[c].interpolate(method="time", limit=MAX_INTERP_GAP_H, limit_area="inside")
-        filled = int(before - df[c].isna().sum())
+        filled_s = interpolate_short_gaps(df[c], MAX_INTERP_GAP_H)
+        filled = int(df[c].isna().sum() - filled_s.isna().sum())
+        df[c] = filled_s
         if filled:
             rep.interpolated[c] = filled
 

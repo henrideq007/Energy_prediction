@@ -18,7 +18,7 @@ Tracked in Notion (business plan, roadmap, decision log, experiments). Repo docs
 | Phase | Content | Status |
 |---|---|---|
 | 0 | Scope, plan, repo, tracker | ✅ |
-| 1 | Data collection (ENTSO-E, weather, commodities) | 🟡 code ready — needs API token + first fetch |
+| 1 | Data collection (ENTSO-E, weather, commodities) | 🟡 first real fetch done (2019 → Oct 2026); TTF gas source to fix (CSV fallback) |
 | 2 | Cleaning, validation, EDA | 🟡 code ready |
 | 3 | Features & train/test split | 🟡 code ready |
 | 4 | Model comparison (walk-forward backtest) | 🟡 code ready — tested on synthetic data |
@@ -48,6 +48,7 @@ python -m energy_forecast demo
 copy .env.example .env             # then paste your ENTSO-E token in .env
 python -m energy_forecast -v fetch
 python -m energy_forecast validate
+python scripts\check_publication_times.py   # leakage check: are tomorrow's TSO forecasts out before 10:00? (D-16)
 python -m energy_forecast -v backtest
 python -m energy_forecast train
 python -m energy_forecast explain

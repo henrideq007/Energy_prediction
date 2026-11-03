@@ -24,9 +24,29 @@ GEN_GROUPS = {
     "wind": ["wind_onshore", "wind_offshore"],
     "nuclear": ["nuclear"],
     "gas": ["fossil_gas"],
-    "hydro": ["hydro_pumped_storage", "hydro_run_of_river_and_poundage", "hydro_water_reservoir"],
+    "hydro": ["hydro_pumped_storage", "hydro_run_of_river_and_pondage", "hydro_run_of_river_and_poundage",
+              "hydro_water_reservoir"],
     "biomass_waste": ["biomass", "waste"],
+    "storage": ["energy_storage"],
 }
+
+# ENTSO-E leaves these types EMPTY (not 0) in hours where they do not generate:
+# - pumped storage while pumping (its consumption is in a separate column we drop)
+# - offshore wind at zero output / curtailment
+# Checked on BE data 2019-2026: pumped storage is "missing" in ~55% of hours, mostly at night (pumping/idle;
+# average price 79 EUR/MWh vs 119 when it generates). The old typo "poundage" also dropped run-of-river.
+# They are set to 0 when the rest of the generation mix is reported for that hour.
+ZERO_IF_MISSING = ("hydro_pumped_storage", "wind_offshore", "energy_storage")
+
+
+def fill_zero_generation(gen: pd.DataFrame) -> pd.DataFrame:
+    """Replace missing values by 0 for types that ENTSO-E leaves empty when they produce nothing."""
+    gen = gen.copy()
+    reported = gen.notna().any(axis=1)
+    for c in ZERO_IF_MISSING:
+        if c in gen:
+            gen.loc[reported & gen[c].isna(), c] = 0.0
+    return gen
 
 
 def _client():
@@ -108,6 +128,7 @@ def fetch_entsoe(cfg: Config, start: pd.Timestamp | None = None, end: pd.Timesta
     # --- Generation (actual, per type) -----------------------------------
     gen = _cached_fetch(cfg, f"gen_{zone}", lambda s, e: client.query_generation(zone, start=s, end=e), start, end)
     if not gen.empty:
+        gen = fill_zero_generation(gen)
         out = pd.DataFrame(index=gen.index)
         for group, cols in GEN_GROUPS.items():
             present = [c for c in cols if c in gen.columns]
