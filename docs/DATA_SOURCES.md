@@ -4,7 +4,7 @@
 |---|---|---|---|---|---|
 | 1 | [ENTSO-E Transparency Platform](https://transparency.entsoe.eu) | Day-ahead prices (BE, FR, NL, DE-LU), actual load, load forecast, actual generation per type, wind & solar day-ahead forecasts, total generation forecast | REST API via `entsoe-py`, needs a free token | Free | Implemented (primary) |
 | 2 | [Open-Meteo](https://open-meteo.com) | Temperature, wind speed, solar radiation, cloud cover for Brussels, Antwerp, Liège, offshore wind zone | REST, no key (archive, historical-forecast, live forecast APIs) | Free (non-commercial) | Implemented |
-| 3 | Yahoo Finance (`yfinance`) + CSV fallback | TTF natural gas front-month (`TTF=F`); fallback `data/external/ttf_prices.csv` (`date,price` in EUR/MWh) | Python package / manual CSV | Free, unofficial | Yahoo returned **no data** on 3 Nov 2026 → use the CSV fallback |
+| 3 | Yahoo Finance (`yfinance`) + CSV fallback | TTF natural gas front-month (`TTF=F`); fallback `data/external/ttf_prices.csv` (`date,price` in EUR/MWh) | Python package / manual CSV | Free, unofficial | Yahoo returned **no data** on 3 Nov 2026 (intermittent on futures tickers). Since 16 Nov 2026: 3 retries + local cache `data/raw/ttf_yahoo_cache.csv` of every successful download; manual CSV fills what is still missing. **To confirm with a real `fetch`** |
 | 4 | Manual CSV | EUA carbon price (`data/external/eua_prices.csv`, columns `date,price`) | e.g. export from a market data site | Free | Optional |
 | 5 | [Elia Open Data](https://opendata.elia.be) | Belgian load, solar/wind estimates & forecasts at 15-min, imbalance prices | Opendatasoft API v2.1 | Free | Optional (disabled) |
 

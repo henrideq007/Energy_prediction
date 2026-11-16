@@ -86,3 +86,64 @@ def test_gas_feature_skipped_when_no_source(tmp_path, monkeypatch):
     out = commodities.fetch_commodities(_cfg(missing), _hourly_index())
 
     assert "ttf_gas" not in out.columns
+
+
+def test_yahoo_retried_until_data(monkeypatch):
+    calls = []
+
+    def fake_close(ticker, start, end):
+        calls.append(ticker)
+        if len(calls) < 3:
+            return pd.Series(dtype=float)
+        return pd.Series([30.0], index=pd.to_datetime(["2026-01-02"]))
+
+    monkeypatch.setattr(commodities, "_yahoo_close", fake_close)
+    out = commodities._ttf_from_yahoo("TTF=F", _hourly_index(), attempts=3, sleep_s=0)
+
+    assert len(calls) == 3
+    assert out.iloc[0] == 30.0
+
+
+def test_yahoo_gives_up_after_attempts(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        commodities, "_yahoo_close", lambda t, s, e: calls.append(t) or pd.Series(dtype=float)
+    )
+    out = commodities._ttf_from_yahoo("TTF=F", _hourly_index(), attempts=2, sleep_s=0)
+
+    assert len(calls) == 2
+    assert out.empty
+
+
+def test_cache_written_then_reused_when_yahoo_fails(tmp_path, monkeypatch):
+    cache = tmp_path / "cache" / "ttf_yahoo_cache.csv"
+    cfg = _cfg(str(tmp_path / "absent.csv"))
+    cfg["commodities"]["ttf_cache"] = str(cache)
+
+    # Run 1: Yahoo works (tz-aware index, as yfinance can return) -> cache is written
+    yahoo = pd.Series(
+        [30.0, 32.0], index=pd.to_datetime(["2026-01-01", "2026-01-02"]).tz_localize("Europe/Amsterdam")
+    )
+    monkeypatch.setattr(commodities, "_ttf_from_yahoo", lambda ticker, index: yahoo)
+    first = commodities.fetch_commodities(cfg, _hourly_index())
+    assert cache.exists()
+    assert first.loc["2026-01-02 12:00", "ttf_gas"] == 32.0
+
+    # Run 2: Yahoo is down -> same values come back from the cache
+    monkeypatch.setattr(commodities, "_ttf_from_yahoo", lambda ticker, index: pd.Series(dtype=float))
+    second = commodities.fetch_commodities(cfg, _hourly_index())
+    pd.testing.assert_series_equal(first["ttf_gas"], second["ttf_gas"])
+
+
+def test_fresh_yahoo_overrides_and_extends_cache(tmp_path, monkeypatch):
+    cache = tmp_path / "ttf_yahoo_cache.csv"
+    cache.write_text("date,price\n2026-01-01,30\n2026-01-02,32\n")
+    cfg = _cfg(str(tmp_path / "absent.csv"))
+    cfg["commodities"]["ttf_cache"] = str(cache)
+    yahoo = pd.Series([33.0, 35.0], index=pd.to_datetime(["2026-01-02", "2026-01-03"]))
+    monkeypatch.setattr(commodities, "_ttf_from_yahoo", lambda ticker, index: yahoo)
+
+    commodities.fetch_commodities(cfg, _hourly_index())
+
+    saved = commodities.read_price_csv(cache)
+    assert list(saved.values) == [30.0, 33.0, 35.0]
