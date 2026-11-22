@@ -17,7 +17,9 @@ Read `CLAUDE.md`, `docs/agent/STATE.md`, the latest `docs/agent/journal/*.md`.
 ✅ Checkpoint: main is green and you know the current phase.
 
 ## Step 1 — Pending reviews first
-`gh pr list --state open --search "head:agent/"` — if a PR has review comments from Henri
+`gh api "repos/henrideq007/Energy_prediction/pulls?state=open" --jq '.[] | select(.head.ref|startswith("agent/")) | "\(.number) \(.head.ref)"'`
+then `gh api repos/henrideq007/Energy_prediction/pulls/<n>/comments` and `.../issues/<n>/comments`
+— if a PR has review comments from Henri
 asking for changes, that PR is this run's task: check out its branch, address the comments,
 go to Step 4.
 
@@ -52,11 +54,13 @@ them (delegate back) once, re-run the reviewer. Still blocking → draft PR + `B
 git add -A && git status   # verify: no .env, no data/, models/, forecasts/
 git commit -m "T<ID>: <title>"
 git push -u origin agent/T<ID>-<slug>
-gh pr create --base main --title "T<ID>: <title>" --body-file <tmp file>
+gh api repos/henrideq007/Energy_prediction/pulls -f title="T<ID>: <title>" \
+  -f head="agent/T<ID>-<slug>" -f base=main -F body=@<tmp file>   # add -F draft=true when blocked
 ```
+Note: in cloud sessions GitHub GraphQL is unavailable, so `gh pr create/list/view` fail —
+always use the REST calls above (`gh api ...`).
 PR body (English): Goal · What changed · How it was tested (commands) · Results (real data
 only) · Reviewer verdict · Questions for Henri · Notion task link.
-Add `--draft` when blocked.
 
 ## Step 6 — Record
 Run the **scribe** sub-agent with: task, branch, PR URL, outcome, changes, results, reviewer

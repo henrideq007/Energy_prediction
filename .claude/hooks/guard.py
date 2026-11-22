@@ -18,7 +18,7 @@ import sys
 BASH_RULES: list[tuple[str, str]] = [
     (r"git\s+push\b.*\b(origin\s+)?(main|master)\b(?!-)", "Pushing to main is forbidden — open a PR from an agent/* branch."),
     (r"git\s+push\b.*(--force|-f\b|--force-with-lease)", "Force-push is forbidden."),
-    (r"\bgh\s+pr\s+merge\b", "Merging PRs is reserved to Henri."),
+    (r"\bgh\s+pr\s+merge\b|pulls/\d+/merge|ccr/auto_merge", "Merging PRs is reserved to Henri."),
     (r"\bgit\s+merge\b.*\bmain\b|\bgit\s+checkout\s+main\b.*&&.*\bgit\s+merge\b", "Merging into main is reserved to Henri."),
     (r"(^|[\s;&|])(cat|less|more|head|tail|type|grep|sed|awk)\b[^|;&]*\.env(\s|$)", "Reading .env is forbidden (secrets)."),
     (r"\bgit\s+add\b[^;&|]*(\.env\b|data/|models/|forecasts/)", "Do not stage secrets, data, models or forecasts."),
