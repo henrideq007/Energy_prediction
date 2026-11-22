@@ -13,7 +13,8 @@ Finish with a one-line summary in French for Henri (task, outcome, PR link), sen
 push notification if possible.
 ```
 
-Suggested schedule: every evening at 21:37 Europe/Brussels (Henri reviews PRs the next day).
+Schedule: **Monday, Wednesday and Friday at 21:37 Europe/Brussels** (Henri reviews PRs the next day;
+at most 2 agent PRs open at a time, see RUNBOOK §1).
 
 ## Before switching it on
 1. Merge the PR that adds this setup.

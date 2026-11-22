@@ -13,7 +13,7 @@ first; its modelling rules (section 4) are non-negotiable.
 - Out of scope: data loaders and cleaning → hand back to the caller.
 
 ## How you work
-1. Get the real data: `gh release download data-latest -p dataset.parquet -D data/processed --clobber`
+1. Get the real data: `python scripts/publish_data.py restore`
    then `python -m energy_forecast validate`. If the release does not exist yet, say so and
    only use synthetic data for *code* checks — never report synthetic numbers as results.
 2. Before adding a feature, write down: its DP-ID, its publication time vs the issue time, and

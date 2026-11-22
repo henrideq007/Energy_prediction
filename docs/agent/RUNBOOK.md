@@ -4,9 +4,16 @@ These rules apply to every unattended run (scheduled task) and to interactive se
 Henri explicitly says otherwise in the conversation.
 
 ## 1. One run = one task
-1. Read `CLAUDE.md`, `docs/agent/STATE.md` and the latest file in `docs/agent/journal/`.
+0. **Review queue first.** Count open PRs from `agent/*` branches. If Henri asked for changes on
+   one, fixing it is this run's task. If **2 or more** agent PRs are open and unreviewed, do not
+   start anything new: notify Henri ("2 PR en attente de relecture") and stop. This keeps
+   `STATE.md` on `main` from going stale and keeps the review load small.
+1. Read `CLAUDE.md`, `docs/agent/STATE.md` and the latest file in `docs/agent/journal/`
+   (on `main` **and** on the open agent branches, so you know what is already in flight).
 2. Pick **one** task in Notion All Tasks: `Owner = Agent`, `Status = To do`, current phase
-   first, then `Priority` High → Low, then lowest `ID`. If none: write a short journal entry
+   first, then `Priority` High → Low, then lowest `ID`. Skip tasks already covered by an open
+   agent PR. If Notion is unreachable, take the first item marked `[agent]` in STATE.md
+   "Next tasks" and say so in the journal. If none: write a short journal entry
    ("nothing to do"), propose up to 3 next tasks in STATE.md, notify Henri, stop.
 3. Set the task to `In progress`.
 4. Work on a branch `agent/T<ID>-<short-slug>` created from an up-to-date `main`.
@@ -16,7 +23,7 @@ Henri explicitly says otherwise in the conversation.
 - Write/modify code under `src/`, `tests/`, `scripts/`, `notebooks/`, `api/`.
 - Write/modify docs under `docs/` and `README.md` (results tables, methodology notes).
 - Run `pytest`, `demo`, `validate`, `backtest`, `train`, `explain` locally in the session.
-- Download releases (`gh release download`).
+- Download the data with `python scripts/publish_data.py restore` (never upload: publishing is done by CI or Henri).
 - Open a pull request to `main` and comment on its own PR.
 - Update the Notion task (status, `PR`, `Notes`), add rows to **Experiments & Results**,
   add **proposed** entries to the Decision Log.

@@ -17,7 +17,7 @@ first; its rules override anything here.
    documented in `docs/DATA_SOURCES.md`).
 2. You cannot reach the ENTSO-E API from the cloud. Work with:
    - the real dataset from the `data-latest` release
-     (`gh release download data-latest -p dataset.parquet -D data/processed --clobber`),
+     (`python scripts/publish_data.py restore`),
    - small hand-made fixtures for tests (no network in tests, ever).
    If a change can only be verified with a live API call, say so explicitly in your report so
    the workflow `fetch-data.yml` or Henri's laptop can verify it.

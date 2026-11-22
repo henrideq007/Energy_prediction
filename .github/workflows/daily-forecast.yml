@@ -35,9 +35,9 @@ jobs:
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: steps.gate.outputs.run == 'true'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.11"
@@ -46,19 +46,22 @@ jobs:
         run: pip install -r requirements.txt
       - name: Get trained models
         if: steps.gate.outputs.run == 'true'
-        run: gh release download models-latest -D models --clobber
+        run: |
+          exec > >(tee -a run.log) 2>&1
+          gh release download models-latest -D models --clobber
       - name: Forecast
         if: steps.gate.outputs.run == 'true'
         env:
           ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
-        run: python -m energy_forecast -v predict
+        run: python -m energy_forecast -v predict 2>&1 | tee -a run.log
       - name: Publish forecast
         if: steps.gate.outputs.run == 'true'
         run: |
+          exec > >(tee -a run.log) 2>&1
           gh release view forecasts >/dev/null 2>&1 || \
             gh release create forecasts --prerelease --title "Live forecasts" --notes "One file per delivery day, by daily-forecast.yml."
           gh release upload forecasts forecasts/forecast_*.csv forecasts/forecast_*.json --clobber
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: steps.gate.outputs.run == 'true'
         with:
           name: forecast

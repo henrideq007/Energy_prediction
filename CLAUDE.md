@@ -23,7 +23,7 @@ more than squeezing the last 1% of MAE.
 | Notion hub (Decision Log, Experiments & Results, Data Sources) | https://app.notion.com/p/40c085376e958121a7d2d634e9d8371b |
 | Notion Roadmap (one page per phase) | https://app.notion.com/p/40c085376e95810983b7dd71b5b34918 |
 | Google Drive project folder (one "mémoire" Doc + one "méthode" Doc per phase) | https://drive.google.com/drive/folders/1i_xuF9wb_fM7c_ohA4mm6bzi1B9xXReN |
-| Real data | GitHub release `data-latest` (built by `.github/workflows/fetch-data.yml`) |
+| Real data | GitHub release `data-latest`: `raw-cache.tar.gz` + `dataset.parquet` (refreshed weekly by `fetch-data.yml`, bootstrapped from the laptop with `scripts/publish_data.py publish`) |
 | Trained models | GitHub release `models-latest` |
 | Publication-time log (D-16) | GitHub release `pubtimes` → `publication_times.csv` |
 
@@ -40,17 +40,21 @@ python -m energy_forecast demo           # full pipeline on synthetic data (no A
 python -m energy_forecast validate       # needs data/processed/dataset.parquet
 python -m energy_forecast backtest [--targets price_da] [--models ridge lightgbm] [--folds 3]
 python -m energy_forecast train | predict | explain
-gh release download data-latest -p "dataset.parquet" -D data/processed --clobber   # get real data
+python scripts/publish_data.py restore   # real data: dataset + raw cache from release data-latest
 ```
 The cloud agent environment **cannot reach the ENTSO-E API** (`web-api.tp.entsoe.eu`).
-Never try `energy_forecast fetch` there — use the `data-latest` release. Fetching is done by
+Never try `energy_forecast fetch` there — use `python scripts/publish_data.py restore`. Fetching is done by
 GitHub Actions (secret `ENTSOE_API_KEY`) or on Henri's laptop.
 
 ## 4. Non-negotiable modelling rules
-- **No leakage.** Only information available at issue time (D-1, currently 10:00 in config;
-  Henri's provisional choice is 11:11 — see STATE.md). Actual load/generation lags >= 48 h, price
-  lags >= 24 h (D-05). A TSO forecast is a same-time feature only if its publication time is
-  verified (D-16). `features.leakage_check()` and the tests must keep passing.
+- **No leakage.** Only information available at the issue time: **D-1 11:00 Brussels** (D-29,
+  `forecast.issue_hour_local: 11`; the cloud job runs at 11:11, just after the cut-off).
+  Actual load/generation lags >= 48 h, price lags >= 24 h (D-05). A forecast series is a
+  same-time feature only if its publication time is verified before 11:00 (D-16): wind/solar use
+  the Elia "day-ahead 11AM" run; ENTSO-E `fc_*` (published ~18:00 D-1) are **baseline-only**
+  (`tso_forecast`). Candidate columns (`nb_`, `unav_`, `xch_`, `fb_`, `cap_BE_`, `hydro_res_`,
+  `elia_` other runs, `wfr_`, `cmd_`, `flag_`) stay out of the features until an ablation test (D-24).
+  `features.leakage_check()` and the tests must keep passing.
 - **Chronological splits only.** Walk-forward monthly folds, expanding window (D-07, D-21).
 - **Baselines first.** A model is "better" only if it beats `naive_day` and
   `seasonal_naive_week` (and `tso_forecast` for production) on the walk-forward backtest (D-09).

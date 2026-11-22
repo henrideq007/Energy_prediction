@@ -7,7 +7,7 @@ description: Run a reproducible walk-forward backtest (or ablation) on the real 
 
 ## 1. Data
 ```bash
-gh release download data-latest -p dataset.parquet -D data/processed --clobber
+python scripts/publish_data.py restore
 python -m energy_forecast validate
 ```
 If the release is missing → stop and report "no real data available"; do **not** fall back to
