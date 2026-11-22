@@ -40,6 +40,7 @@ weather:
 commodities:
   enabled: true
   ttf_ticker: "TTF=F"              # Dutch TTF gas front-month (Yahoo Finance via yfinance)
+  ttf_cache: data/raw/ttf_yahoo_cache.csv # every successful Yahoo download is kept here and reused if Yahoo fails
   ttf_csv: data/external/ttf_prices.csv   # fallback / gap filler if Yahoo returns nothing: columns date,price (EUR/MWh)
   eua_csv: data/external/eua_prices.csv   # optional manual CSV: columns date,price
   publication_lag_days: 2          # close of D-2 is the latest known at D-1 10:00
