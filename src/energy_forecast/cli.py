@@ -122,6 +122,10 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("explain"); s.add_argument("--target")
 
     a = p.parse_args(argv)
+    # Windows consoles default to cp1252: reports contain "→" / "≥" -> force UTF-8 output
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     cfg = load_config(a.config)
     {"fetch": cmd_fetch, "validate": cmd_validate, "backtest": cmd_backtest, "train": cmd_train,

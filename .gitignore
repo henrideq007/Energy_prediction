@@ -27,3 +27,6 @@ reports/cache/
 Thumbs.db
 desktop.ini
 .ruff_cache/
+
+# Run logs (may contain API URLs with tokens)
+reports/*.log

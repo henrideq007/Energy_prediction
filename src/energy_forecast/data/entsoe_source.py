@@ -49,6 +49,27 @@ def fill_zero_generation(gen: pd.DataFrame) -> pd.DataFrame:
     return gen
 
 
+def call_with_retry(fn, label: str, tries: int = 4):
+    """Call fn(); retry transient errors (5xx, 429, connection). NoMatchingDataError is re-raised at once.
+
+    The exception text is never logged: ENTSO-E puts the security token in the request URL.
+    """
+    from entsoe.exceptions import NoMatchingDataError
+
+    for attempt in range(tries):
+        try:
+            return fn()
+        except NoMatchingDataError:
+            raise
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            transient = status is None or status >= 500 or status == 429
+            if not transient or attempt == tries - 1:
+                raise RuntimeError(f"ENTSO-E {label} failed ({type(exc).__name__}, HTTP {status})") from None
+            log.info("ENTSO-E %s: HTTP %s, retry %s", label, status, attempt + 1)
+            time.sleep(5 * 2 ** attempt)
+
+
 def _client():
     from entsoe import EntsoePandasClient
 
@@ -76,10 +97,32 @@ def _cached_fetch(
             parts.append(pd.read_parquet(f))
             continue
         log.info("ENTSO-E %s %s -> %s", name, s.date(), e.date())
-        try:
-            res = fn(s.tz_convert("Europe/Brussels"), e.tz_convert("Europe/Brussels"))
-        except NoMatchingDataError:
-            log.warning("No data for %s in %s -> %s", name, s.date(), e.date())
+        res = None
+        for attempt in range(4):  # transient 5xx / connection errors are common on the Transparency API
+            try:
+                res = fn(s.tz_convert("Europe/Brussels"), e.tz_convert("Europe/Brussels"))
+                break
+            except NoMatchingDataError:
+                log.warning("No data for %s in %s -> %s", name, s.date(), e.date())
+                break
+            except Exception as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                transient = status is None or status >= 500 or status == 429
+                if status == 400 and (e - s) > pd.Timedelta(days=32):
+                    # some series (e.g. BE net position around the 2022 Core go-live) reject multi-month
+                    # windows -> retry month by month and cache the result under the chunk name
+                    res = _monthly_fallback(fn, s, e)
+                    if res is None:
+                        log.warning("ENTSO-E %s %s -> %s failed month by month too — chunk skipped",
+                                    name, s.date(), e.date())
+                    break
+                if not transient or attempt == 3:
+                    # never log the exception text: ENTSO-E puts the token in the request URL
+                    log.warning("ENTSO-E %s %s -> %s failed (%s, HTTP %s) — chunk skipped",
+                                name, s.date(), e.date(), type(exc).__name__, status)
+                    break
+                time.sleep(5 * 2 ** attempt)
+        if res is None:
             continue
         df = res.to_frame(name) if isinstance(res, pd.Series) else res
         df = _flatten(df)
@@ -90,6 +133,26 @@ def _cached_fetch(
         return pd.DataFrame()
     out = pd.concat(parts)
     return to_hourly_utc(out[~out.index.duplicated(keep="last")])
+
+
+def _monthly_fallback(fn, s: pd.Timestamp, e: pd.Timestamp):
+    """Call fn month by month over [s, e); return the concatenated result or None."""
+    from entsoe.exceptions import NoMatchingDataError
+
+    parts = []
+    for ms, me in month_chunks(s, e, 1):
+        try:
+            r = call_with_retry(lambda ms=ms, me=me: fn(ms.tz_convert("Europe/Brussels"), me.tz_convert("Europe/Brussels")),
+                                f"monthly fallback {ms.date()}")
+        except NoMatchingDataError:
+            continue
+        except Exception:
+            continue
+        parts.append(r)
+    if not parts:
+        return None
+    out = pd.concat(parts)
+    return out[~out.index.duplicated(keep="last")]
 
 
 def _flatten(df: pd.DataFrame) -> pd.DataFrame:

@@ -59,6 +59,14 @@ def _bounds(col: str) -> tuple[float, float] | None:
         return PRICE_BOUNDS
     if col.startswith(("load_", "gen_", "fc_")):
         return (0.0, 30000.0)  # BE peak load is ~14 GW; generous upper bound
+    if col.startswith(("nb_", "elia_")):
+        return (0.0, 150000.0)  # neighbour zones (DE-LU peak load ~80 GW)
+    if col.startswith("unav_"):
+        return (0.0, 100000.0)
+    if col.startswith(("xch_", "fb_")):
+        return (-20000.0, 20000.0)
+    if col in ("ttf_gas", "eua_carbon"):
+        return (-50.0, 1000.0)
     if col.endswith("temperature_2m"):
         return (-30.0, 45.0)
     if col.endswith(("shortwave_radiation",)):

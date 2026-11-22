@@ -26,6 +26,13 @@ entsoe:
   chunk_months: 3                  # size of each API request window
   request_sleep_s: 0.5             # be polite with the API
 
+entsoe_extra:                      # Phase 1 candidate data points (D-23): stored, NOT used by features.py yet
+  enabled: true
+  neighbour_zones: [FR, NL, DE_LU] # DP-029..DP-036: load fc, wind/solar fc, generation fc, actual load (+ FR nuclear gen)
+  exchange_borders: [FR, NL, DE_LU, GB]   # DP-026: day-ahead scheduled exchanges (auction results -> lag only)
+  hydro_reservoir_zones: [FR, CH]  # DP-044: weekly reservoir filling
+  outage_zones: [BE, FR]           # DP-025 / DP-031: unavailable MW as known at D-1 10:00
+
 weather:
   # archive            -> ERA5 reanalysis (observed weather; optimistic for backtests)
   # historical_forecast -> archived NWP forecasts (realistic, available ~2022+)
@@ -36,18 +43,39 @@ weather:
     antwerp: [51.22, 4.40]
     liege: [50.63, 5.57]
     offshore_wind_zone: [51.60, 2.90]   # Belgian North Sea concession area (approx.)
+  candidate_prefix: wfr_          # DP-043 France temperature (candidate, ignored by features.py until tested)
+  candidate_variables: [temperature_2m]
+  candidate_locations:             # largest French demand centres (electric heating drives FR load)
+    paris: [48.86, 2.35]
+    lyon: [45.76, 4.84]
+    lille: [50.63, 3.06]
+    toulouse: [43.60, 1.44]
+    marseille: [43.30, 5.37]
 
 commodities:
   enabled: true
   ttf_ticker: "TTF=F"              # Dutch TTF gas front-month (Yahoo Finance via yfinance)
   ttf_csv: data/external/ttf_prices.csv   # fallback / gap filler if Yahoo returns nothing: columns date,price (EUR/MWh)
-  eua_csv: data/external/eua_prices.csv   # optional manual CSV: columns date,price
+  eua_csv: data/external/eua_prices.csv   # optional manual CSV override: columns date,price
+  raw_dir: data/raw/commodities    # cache for THE / FRED / AGSI downloads
+  gas_the_api: true                # D-24: THE (German hub) official daily VTP average price, Oct 2021 ->
+  gas_monthly_backfill: true       # D-24: IMF EU gas (FRED PNGASEUUSDM), monthly, 2019 -> Sep 2021 only
+  eua_eex_auctions: true           # D-25: EEX primary-auction clearing prices (xlsx in data/raw/eex)
+  eex_dir: data/raw/eex
+  eua_etc_ticker: "CO2.L"          # D-25: SparkChange EUA ETC (EUR) fills days without an auction report
+  coal_ticker: "MTF=F"             # DP-047 candidate: Rotterdam coal (Yahoo; history ends Dec 2025)
+  gas_storage_agsi: true           # DP-048 candidate: needs a free AGSI_API_KEY in .env (agsi.gie.eu)
   publication_lag_days: 2          # close of D-2 is the latest known at D-1 10:00
 
 elia:
-  enabled: false                   # ENTSO-E already covers BE; Elia adds finer detail
+  enabled: true                    # DP-027 / DP-028: Elia wind (ods031) & solar (ods032 + ods209) forecast runs
   base_url: https://opendata.elia.be/api/explore/v2.1/catalog/datasets
-  datasets: {}                     # e.g. {solar_elia: ods032} — verify IDs on opendata.elia.be
+  technologies: [wind, solar]      # columns elia_<tech>_<run>; see data/elia.py for the run publication times
+
+jao:                               # DP-040 candidate: Core flow-based BE min/max net position (jao-py), from Jun 2022
+  enabled: true
+  zone: BE
+  request_sleep_s: 0.2
 
 forecast:
   issue_hour_local: 10             # forecast issued on D-1 at 10:00 (before 12:00 SDAC gate closure)

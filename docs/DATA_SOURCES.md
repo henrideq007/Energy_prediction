@@ -1,37 +1,56 @@
 # Data sources
 
-| # | Source | Data | Access | Cost | Status |
-|---|---|---|---|---|---|
-| 1 | [ENTSO-E Transparency Platform](https://transparency.entsoe.eu) | Day-ahead prices (BE, FR, NL, DE-LU), actual load, load forecast, actual generation per type, wind & solar day-ahead forecasts, total generation forecast | REST API via `entsoe-py`, needs a free token | Free | Implemented (primary) |
-| 2 | [Open-Meteo](https://open-meteo.com) | Temperature, wind speed, solar radiation, cloud cover for Brussels, Antwerp, Liège, offshore wind zone | REST, no key (archive, historical-forecast, live forecast APIs) | Free (non-commercial) | Implemented |
-| 3 | Yahoo Finance (`yfinance`) + CSV fallback | TTF natural gas front-month (`TTF=F`); fallback `data/external/ttf_prices.csv` (`date,price` in EUR/MWh) | Python package / manual CSV | Free, unofficial | Yahoo returned **no data** on 3 Nov 2026 → use the CSV fallback |
-| 4 | Manual CSV | EUA carbon price (`data/external/eua_prices.csv`, columns `date,price`) | e.g. export from a market data site | Free | Optional |
-| 5 | [Elia Open Data](https://opendata.elia.be) | Belgian load, solar/wind estimates & forecasts at 15-min, imbalance prices | Opendatasoft API v2.1 | Free | Optional (disabled) |
+All sources are free. Everything is downloaded by `python -m energy_forecast -v fetch` and cached in
+`data/raw/<source>/` (git-ignored), then assembled into `data/processed/dataset.parquet`.
 
-## Getting the ENTSO-E token
-1. Create an account on https://transparency.entsoe.eu.
-2. Send an email to **transparency@entsoe.eu** with subject **"Restful API access"** and your account email in the body.
-3. Once approved (usually a few days), go to *My Account Settings* → *Generate a new token*.
-4. Copy `.env.example` to `.env` and paste it: `ENTSOE_API_KEY=...`.
+## Core sources (used by the model)
 
-## Manual CSVs (data/external/, git-ignored — never committed)
-- `ttf_prices.csv` and `eua_prices.csv`: two columns `date,price`, one row per trading day. ISO dates (`2026-10-27`)
-  or day-first dates (`27/10/2026`) and decimal commas are accepted. If Yahoo works again, the CSV only fills gaps.
-- Check the terms of the site you export from; the files stay local because `data/external/*` is git-ignored.
+| # | Source | Data | Access | Columns |
+|---|---|---|---|---|
+| 1 | [ENTSO-E Transparency Platform](https://transparency.entsoe.eu) | Day-ahead prices (BE, FR, NL, DE-LU), BE actual load & load forecast, BE generation per type, BE wind/solar & total generation day-ahead forecasts | REST API via `entsoe-py`, free token in `.env` | `price_da*`, `load_*`, `gen_*`, `fc_*` |
+| 2 | [Open-Meteo](https://open-meteo.com) | Temperature, 100 m wind speed, solar radiation, cloud cover — Brussels, Antwerp, Liège, offshore wind zone | REST, no key (ERA5 archive + live forecast) | `w_<point>_<var>` |
+| 3 | [THE — Trading Hub Europe](https://api.tradinghub.eu/api/dataexport/manual/en) | Official daily VTP average gas price, German hub, from 1 Oct 2021 (TTF substitute, D-24) | REST, no key | `ttf_gas` |
+| 4 | [IMF via FRED](https://fred.stlouisfed.org/series/PNGASEUUSDM) | Monthly EU gas price (TTF-based) → EUR/MWh, back-fill 2019 → Sep 2021 only | CSV, no key | `ttf_gas`, `flag_gas_monthly_proxy` |
+| 5 | [EEX EU ETS auctions](https://www.eex.com/en/markets/environmentals/eu-ets1-eu-ets2-auctions/eu-ets1-auctions) | EUA primary-auction clearing price (≈210 days/year), 2018 → 2025 | Yearly xlsx reports (archive zip auto-downloaded) | `eua_carbon` |
+| 6 | Yahoo Finance `CO2.L` | SparkChange EUA ETC (EUR) × rolling auction/ETC ratio — fills auction-free days and 2026 (D-25) | `yfinance` | `eua_carbon`, `flag_eua_etc_proxy` |
+| 7 | Python `holidays` | Belgian public holidays | package | features only |
+
+## Candidate sources (collected, NOT used by `features.py` until an ablation test — D-15, D-23)
+
+| Source | Data | Columns |
+|---|---|---|
+| ENTSO-E (FR, NL, DE-LU) | Load forecast & actual, wind/solar forecast, generation forecast, FR nuclear generation (DP-029..036) | `nb_<zone>_*` |
+| ENTSO-E outages (A80) | Nuclear unit unavailability BE & FR **as known at D-1 10:00**, from the full revision history (D-26). BE only from 2022 (no earlier messages on ENTSO-E) | `unav_BE_nuclear_mw`, `unav_FR_nuclear_mw` |
+| ENTSO-E exchanges | Day-ahead scheduled exchanges BE↔FR/NL/DE-LU/GB, BE net position (auction results → lag only) | `xch_*` |
+| ENTSO-E capacity / hydro | BE installed capacity per type (yearly), FR & CH reservoir filling (weekly) | `cap_BE_*`, `hydro_res_*` |
+| [JAO Core](https://publicationtool.jao.eu/core) (`jao-py`) | Flow-based BE min/max net position, from Jun 2022 (DP-040) | `fb_BE_min_np`, `fb_BE_max_np` |
+| [Elia Open Data](https://opendata.elia.be) | Wind (ods031) & solar (ods032 + ods209) measured + week-ahead / day-ahead 11h / day-ahead runs (D-27) | `elia_<wind|solar>_*` |
+| Open-Meteo | Temperature in 5 French cities (DP-043) | `wfr_<city>_temperature_2m` |
+| Yahoo `MTF=F` | Rotterdam coal (DP-047) — Yahoo history stops Dec 2025 | `cmd_coal_api2` |
+| [GIE AGSI+](https://agsi.gie.eu) | EU gas storage % full (DP-048) — **needs a free key** `AGSI_API_KEY` in `.env` | `cmd_gas_storage_eu_pct` |
+
+Not usable: Open-Meteo ensemble (only ~3 months of history → live-only, DP-042); EEX futures, TTF
+day-ahead, EPEX curves (paid, D-17).
+
+## Getting the keys
+- **ENTSO-E**: account on transparency.entsoe.eu → email transparency@entsoe.eu, subject "Restful API access"
+  → *My Account Settings* → *Generate a new token* → `ENTSOE_API_KEY=...` in `.env`.
+- **AGSI+ (optional)**: register at https://agsi.gie.eu → copy the API key → `AGSI_API_KEY=...` in `.env`.
+
+## Manual files
+- `data/external/ttf_prices.csv`, `data/external/eua_prices.csv` (`date,price`): optional overrides, they win over
+  every automatic source. ISO or day-first dates and decimal commas are accepted.
+- `data/raw/eex/`: drop the current-year *Emission Spot Primary Market Auction Report* xlsx here to replace the
+  ETC proxy (not linked statically on eex.com, so it cannot be downloaded automatically).
 
 ## Publication-time check (decision D-16)
 Run `python scripts/check_publication_times.py` at 09:00, 09:45, 10:15, 12:00 and 18:30 on a few days.
-Each run appends to `reports/publication_times.csv` whether tomorrow's load, wind/solar and generation
-forecasts (BE, FR, NL, DE-LU) are already published. Only series available before 10:00 may be used as
-same-time features.
+Each run appends to `reports/publication_times.csv` whether tomorrow's forecasts are already published.
+Only series available before 10:00 may be used as same-time features.
 
-## Known data quirks (first real fetch, 3 Nov 2026)
+## Known data quirks
 - Pumped storage (and sometimes offshore wind) is left EMPTY by ENTSO-E when it does not generate → treated as 0.
-- BE nuclear = 0 MW from April to October 2026 (outage of the remaining units) — a regime the model must handle.
+- BE nuclear = 0 MW from April to October 2026 (Doel 4 / Tihange 3 outage) — a regime the model must handle.
 - `fc_gen_total` (A71) is on average ~440 MW below actual total generation: a weak baseline for `gen_total`.
-
-## Ideas for later (backlog)
-- Cross-border scheduled flows / net transfer capacity (ENTSO-E)
-- Nuclear unit unavailability (ENTSO-E "unavailability of generation units") — big driver in BE
-- Historical weather *forecasts* instead of reanalysis
-- Elia imbalance prices → extension to balancing-market forecasting
+- Gas before Oct 2021 is a MONTHLY step (published the month after) → it lags fast moves such as the Sep 2021 surge.
+- Elia solar history starts Oct 2020; JAO flow-based starts Jun 2022; EUA ETC starts Oct 2021.

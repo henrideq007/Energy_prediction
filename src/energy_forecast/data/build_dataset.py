@@ -15,7 +15,9 @@ def build_dataset(cfg: Config, start: pd.Timestamp | None = None, end: pd.Timest
                   weather_source: str | None = None, save: bool = True) -> pd.DataFrame:
     from energy_forecast.data.commodities import fetch_commodities
     from energy_forecast.data.elia import fetch_elia
+    from energy_forecast.data.entsoe_extra import fetch_entsoe_extra
     from energy_forecast.data.entsoe_source import fetch_entsoe
+    from energy_forecast.data.jao_source import fetch_jao
     from energy_forecast.data.weather import fetch_weather
 
     start = start or cfg.start
@@ -28,7 +30,13 @@ def build_dataset(cfg: Config, start: pd.Timestamp | None = None, end: pd.Timest
 
     idx = pd.date_range(start, end, freq="1h", tz="UTC", inclusive="left")
     df = pd.DataFrame(index=idx).join(grid).join(weather)
+    extra = fetch_entsoe_extra(cfg, start, end, idx)
+    log.info("ENTSO-E extra: %s cols", extra.shape[1])
+    df = df.join(extra)
     df = df.join(fetch_commodities(cfg, idx))
+    jao = fetch_jao(cfg, start, end)
+    if not jao.empty:
+        df = df.join(jao)
     elia = fetch_elia(cfg, start, end)
     if not elia.empty:
         df = df.join(elia)
