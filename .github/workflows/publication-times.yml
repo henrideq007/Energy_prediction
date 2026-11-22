@@ -39,20 +39,39 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
+      - name: Check that the ENTSOE_API_KEY secret is available
+        env:
+          ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
+        run: |
+          if [ -z "$ENTSOE_API_KEY" ]; then
+            echo "::error title=Missing secret::ENTSOE_API_KEY is empty. Add it under Settings > Secrets and variables > Actions > Repository secrets (not Environment, Codespaces or Variables)."
+            exit 1
+          fi
+          echo "ENTSOE_API_KEY is set (${#ENTSOE_API_KEY} characters)."
       - name: Restore previous log
-        run: gh release download pubtimes -p publication_times.csv -D reports --clobber || echo "first run"
+        run: |
+          exec > >(tee -a run.log) 2>&1
+          gh release download pubtimes -p publication_times.csv -D reports --clobber || echo "first run"
       - name: Check
         env:
           ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
-        run: python scripts/check_publication_times.py
+        run: python scripts/check_publication_times.py 2>&1 | tee -a run.log
       - name: Publish log
         run: |
+          exec > >(tee -a run.log) 2>&1
           gh release view pubtimes >/dev/null 2>&1 || \
             gh release create pubtimes --prerelease --title "Publication-time log (D-16)" --notes "Appended by publication-times.yml."
           gh release upload pubtimes reports/publication_times.csv --clobber
+
+      - name: Report the error (visible in the run summary)
+        if: failure()
+        run: |
+          [ -f run.log ] || exit 0
+          msg=$(tail -n 25 run.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Last log lines::${msg}"

@@ -24,29 +24,41 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
+      - name: Check that the ENTSOE_API_KEY secret is available
+        env:
+          ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
+        run: |
+          if [ -z "$ENTSOE_API_KEY" ]; then
+            echo "::error title=Missing secret::ENTSOE_API_KEY is empty. Add it under Settings > Secrets and variables > Actions > Repository secrets (not Environment, Codespaces or Variables)."
+            exit 1
+          fi
+          echo "ENTSOE_API_KEY is set (${#ENTSOE_API_KEY} characters)."
 
       - name: Restore manual CSVs (TTF fallback, EUA) from the previous release, if any
-        run: gh release download data-latest -p "*_prices.csv" -D data/external --clobber || echo "no CSVs yet"
+        run: |
+          exec > >(tee -a run.log) 2>&1
+          gh release download data-latest -p "*_prices.csv" -D data/external --clobber || echo "no CSVs yet"
 
       - name: Fetch
         env:
           ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
-        run: python -m energy_forecast -v fetch
+        run: python -m energy_forecast -v fetch 2>&1 | tee -a run.log
 
       - name: Validate
-        run: python -m energy_forecast validate
+        run: python -m energy_forecast validate 2>&1 | tee -a run.log
 
       - name: Train final models
-        run: python -m energy_forecast train
+        run: python -m energy_forecast train 2>&1 | tee -a run.log
 
       - name: Publish data release
         run: |
+          exec > >(tee -a run.log) 2>&1
           gh release view data-latest >/dev/null 2>&1 || \
             gh release create data-latest --prerelease --title "Data (latest)" \
               --notes "Weekly refresh by fetch-data.yml. Sources: ENTSO-E Transparency Platform, Open-Meteo, Yahoo Finance (TTF). Regenerable; not for redistribution beyond this project."
@@ -57,6 +69,14 @@ jobs:
 
       - name: Publish models release
         run: |
+          exec > >(tee -a run.log) 2>&1
           gh release view models-latest >/dev/null 2>&1 || \
             gh release create models-latest --prerelease --title "Models (latest)" --notes "Trained by fetch-data.yml on all history."
           gh release upload models-latest models/*.joblib models/*.json --clobber
+
+      - name: Report the error (visible in the run summary)
+        if: failure()
+        run: |
+          [ -f run.log ] || exit 0
+          msg=$(tail -n 25 run.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Last log lines::${msg}"
