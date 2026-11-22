@@ -7,7 +7,7 @@ one request per delivery day, cached per month in data/raw/jao.
 
 Publication: Core final FB parameters are published on D-1 in the morning — the exact time vs
 our 10:00 issue time is still to verify (open question in the inventory). Prefix `fb_` is
-ignored by features.py until the ablation test (D-15, D-23).
+ignored by features.py until the ablation test (D-15, D-24).
 """
 
 from __future__ import annotations

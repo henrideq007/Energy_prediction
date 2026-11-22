@@ -1,11 +1,11 @@
 """ENTSO-E — extra series collected in Phase 1 (candidate data points DP-025..DP-044).
 
 None of these columns enter the model automatically: `features.py` only picks up the core
-prefixes. Prefixes used here (decision D-23):
+prefixes. Prefixes used here (decision D-24):
 
     nb_<ZONE>_*      neighbour fundamentals (FR, NL, DE_LU): load forecast, wind/solar forecast,
                      generation forecast, actual load, FR actual nuclear generation
-    unav_*           nuclear unit unavailability (MW) AS KNOWN AT D-1 10:00 (leakage-free, D-26)
+    unav_*           nuclear unit unavailability (MW) AS KNOWN AT D-1 10:00 (leakage-free, D-27)
     xch_*            day-ahead scheduled exchanges / net position (auction RESULTS -> lag only)
     cap_BE_*         installed capacity per production type (yearly, forward-filled)
     hydro_res_*      weekly hydro reservoir filling (MWh, forward-filled)
@@ -300,7 +300,7 @@ def _tidy_outages(u: pd.DataFrame) -> pd.DataFrame:
 
 
 def _outages(cfg: Config, client, start, end, index) -> pd.DataFrame:
-    """DP-025 (BE nuclear) and DP-031 (FR nuclear): unavailable MW as known at D-1 10:00 (D-26).
+    """DP-025 (BE nuclear) and DP-031 (FR nuclear): unavailable MW as known at D-1 10:00 (D-27).
 
     Uses the FULL revision history of each nuclear outage message. Other plant types are not
     rebuilt (their history would need ~23k extra requests); an ex-post version would leak.

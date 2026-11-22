@@ -26,7 +26,7 @@ entsoe:
   chunk_months: 3                  # size of each API request window
   request_sleep_s: 0.5             # be polite with the API
 
-entsoe_extra:                      # Phase 1 candidate data points (D-23): stored, NOT used by features.py yet
+entsoe_extra:                      # Phase 1 candidate data points (D-24): stored, NOT used by features.py yet
   enabled: true
   neighbour_zones: [FR, NL, DE_LU] # DP-029..DP-036: load fc, wind/solar fc, generation fc, actual load (+ FR nuclear gen)
   exchange_borders: [FR, NL, DE_LU, GB]   # DP-026: day-ahead scheduled exchanges (auction results -> lag only)
@@ -55,14 +55,15 @@ weather:
 commodities:
   enabled: true
   ttf_ticker: "TTF=F"              # Dutch TTF gas front-month (Yahoo Finance via yfinance)
+  ttf_cache: data/raw/ttf_yahoo_cache.csv # every successful Yahoo download is kept here and reused if Yahoo fails
   ttf_csv: data/external/ttf_prices.csv   # fallback / gap filler if Yahoo returns nothing: columns date,price (EUR/MWh)
   eua_csv: data/external/eua_prices.csv   # optional manual CSV override: columns date,price
   raw_dir: data/raw/commodities    # cache for THE / FRED / AGSI downloads
-  gas_the_api: true                # D-24: THE (German hub) official daily VTP average price, Oct 2021 ->
-  gas_monthly_backfill: true       # D-24: IMF EU gas (FRED PNGASEUUSDM), monthly, 2019 -> Sep 2021 only
-  eua_eex_auctions: true           # D-25: EEX primary-auction clearing prices (xlsx in data/raw/eex)
+  gas_the_api: true                # D-25: THE (German hub) official daily VTP average price, Oct 2021 ->
+  gas_monthly_backfill: true       # D-25: IMF EU gas (FRED PNGASEUUSDM), monthly, 2019 -> Sep 2021 only
+  eua_eex_auctions: true           # D-26: EEX primary-auction clearing prices (xlsx in data/raw/eex)
   eex_dir: data/raw/eex
-  eua_etc_ticker: "CO2.L"          # D-25: SparkChange EUA ETC (EUR) fills days without an auction report
+  eua_etc_ticker: "CO2.L"          # D-26: SparkChange EUA ETC (EUR) fills days without an auction report
   coal_ticker: "MTF=F"             # DP-047 candidate: Rotterdam coal (Yahoo; history ends Dec 2025)
   gas_storage_agsi: true           # DP-048 candidate: needs a free AGSI_API_KEY in .env (agsi.gie.eu)
   publication_lag_days: 2          # close of D-2 is the latest known at D-1 10:00

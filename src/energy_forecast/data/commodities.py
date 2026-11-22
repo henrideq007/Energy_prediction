@@ -1,13 +1,16 @@
 """Fuel & carbon prices — the marginal cost drivers of gas-fired plants that often set the BE price.
 
-Gas (`ttf_gas`, EUR/MWh) — first available source wins, day by day (decision D-24):
-  1. manual CSV `commodities.ttf_csv` (date,price) — real TTF closes if you have them
-  2. THE (Trading Hub Europe, German hub) official daily VTP average price — free API, no key,
+Gas (`ttf_gas`, EUR/MWh) — first available source wins, day by day (decision D-25):
+  1. Yahoo Finance `TTF=F` (yfinance) — real TTF front-month closes. Retried (futures tickers fail
+     intermittently, two yfinance code paths) and every successful download is kept in a local cache
+     (`commodities.ttf_cache`, decision D-23). As of Nov 2026 Yahoo only serves recent quotes, so the cache
+     builds the real-TTF record from now on.
+  2. manual CSV `commodities.ttf_csv` (date,price) — fills days Yahoo/cache do not have
+  3. THE (Trading Hub Europe, German hub) official daily VTP average price — free API, no key,
      from 1 Oct 2021. THE and TTF are tightly coupled (spread usually < 2 EUR/MWh).
-  3. Yahoo Finance `TTF=F` (yfinance) — as of Nov 2026 it only returns the latest quote
   4. IMF "Global price of natural gas, EU" (FRED PNGASEUUSDM, TTF-based), MONTHLY, converted to
-     EUR/MWh with the daily ECB-equivalent EUR/USD (FRED DEXUSEU) — back-fill for 2019 → Sep 2021
-Carbon (`eua_carbon`, EUR/t) (decision D-25):
+     EUR/MWh with the daily EUR/USD (FRED DEXUSEU) — back-fill for 2019 → Sep 2021 only
+Carbon (`eua_carbon`, EUR/t) (decision D-26):
   1. manual CSV `commodities.eua_csv`
   2. EEX EU ETS primary-auction clearing prices (official, free xlsx reports in data/raw/eex/)
   3. SparkChange Physical Carbon EUA ETC (`CO2.L`, EUR) x rolling ratio to the auction price —
@@ -24,6 +27,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import time
 import zipfile
 from pathlib import Path
 
@@ -81,25 +85,69 @@ def read_price_csv(path: str | Path) -> pd.Series:
 
 # --------------------------------------------------------------------------- Yahoo
 def _yahoo_close(ticker: str, start: str, end: str) -> pd.Series:
+    """One Yahoo attempt: `yf.download` first, then `Ticker.history` (a different code path in yfinance)."""
+    import yfinance as yf
+
+    for method in ("download", "history"):
+        try:
+            if method == "download":
+                data = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
+            else:
+                data = yf.Ticker(ticker).history(start=start, end=end, auto_adjust=False)
+        except Exception as exc:  # network / ticker issues should not kill the pipeline
+            log.warning("Yahoo %s %s failed: %s", ticker, method, exc)
+            continue
+        if data is None or data.empty or "Close" not in data:
+            continue
+        close = data["Close"]
+        close = close.iloc[:, 0] if isinstance(close, pd.DataFrame) else close
+        close = close.dropna()
+        if not close.empty:
+            return close
+    return pd.Series(dtype=float)
+
+
+def _yahoo_series(ticker: str, start: str, end: str) -> pd.Series:
+    """Single Yahoo call that never raises (used for the ETC and coal candidates)."""
     try:
-        import yfinance as yf
-
-        d = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
-    except Exception as exc:  # network / ticker issues should not kill the pipeline
-        log.warning("Yahoo download %s failed: %s", ticker, exc)
+        return _yahoo_close(ticker, start, end)
+    except ImportError as exc:
+        log.warning("yfinance is not installed: %s", exc)
         return pd.Series(dtype=float)
-    if d is None or d.empty:
-        log.warning("Yahoo returned no data for %s", ticker)
-        return pd.Series(dtype=float)
-    close = d["Close"]
-    close = close.iloc[:, 0] if isinstance(close, pd.DataFrame) else close
-    return close.dropna()
 
 
-def _ttf_from_yahoo(ticker: str, index: pd.DatetimeIndex) -> pd.Series:
+def _ttf_from_yahoo(ticker: str, index: pd.DatetimeIndex, attempts: int = 3, sleep_s: float = 2.0) -> pd.Series:
+    """TTF front-month daily closes from Yahoo. Futures tickers fail intermittently, so retry a few times."""
     start = (index.min() - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
     end = (index.max() + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    return _yahoo_close(ticker, start, end)
+    for attempt in range(1, attempts + 1):
+        try:
+            close = _yahoo_close(ticker, start, end)
+        except ImportError as exc:
+            log.warning("yfinance is not installed: %s", exc)
+            return pd.Series(dtype=float)
+        if not close.empty:
+            return close
+        if attempt < attempts:
+            time.sleep(sleep_s * attempt)
+    log.warning("Yahoo returned no data for %s after %s attempts — using cache / other gas sources", ticker, attempts)
+    return pd.Series(dtype=float)
+
+
+def _merge_with_cache(fresh: pd.Series, cache_path: Path) -> pd.Series:
+    """Keep every Yahoo close ever downloaded, so a failed download later does not lose the gas feature.
+
+    Fresh values win over cached ones; the cache is rewritten only when Yahoo returned something.
+    """
+    cached = read_price_csv(cache_path) if cache_path.exists() else pd.Series(dtype=float)
+    if fresh.empty:
+        if not cached.empty:
+            log.info("TTF: Yahoo empty, using %s cached closes (last %s)", len(cached), cached.index.max().date())
+        return cached
+    merged = _naive_daily(fresh).combine_first(cached) if not cached.empty else _naive_daily(fresh)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"date": merged.index.strftime("%Y-%m-%d"), "price": merged.to_numpy()}).to_csv(cache_path, index=False)
+    return merged
 
 
 # --------------------------------------------------------------------------- THE (German gas hub)
@@ -276,8 +324,12 @@ def fetch_commodities(cfg: Config, index: pd.DatetimeIndex) -> pd.DataFrame:
     raw = ROOT / ccfg.get("raw_dir", "data/raw/commodities")
     start, end = index.min(), index.max()
 
-    # --- Gas: CSV > THE daily > Yahoo TTF > IMF monthly ------------------
+    # --- Gas: Yahoo TTF (+ cache) > manual CSV > THE daily > IMF monthly (D-23, D-25) ----
     layers: list[tuple[str, pd.Series]] = []
+    ttf = _ttf_from_yahoo(ccfg["ttf_ticker"], index)
+    if ccfg.get("ttf_cache"):
+        ttf = _merge_with_cache(ttf, ROOT / ccfg["ttf_cache"])
+    layers.append(("yahoo", ttf))
     ttf_csv = ccfg.get("ttf_csv")
     if ttf_csv and (ROOT / ttf_csv).exists():
         csv = read_price_csv(ROOT / ttf_csv)
@@ -287,8 +339,6 @@ def fetch_commodities(cfg: Config, index: pd.DatetimeIndex) -> pd.DataFrame:
         the = gas_from_the(raw, start, end)
         log.info("THE gas: %s days", len(the))
         layers.append(("the", the))
-    ttf = _ttf_from_yahoo(ccfg["ttf_ticker"], index)
-    layers.append(("yahoo", ttf))
     if ccfg.get("gas_monthly_backfill", False):
         layers.append(("imf_monthly", gas_monthly_proxy(raw)))
     gas, monthly_days = pd.Series(dtype=float), pd.DatetimeIndex([])
@@ -317,7 +367,7 @@ def fetch_commodities(cfg: Config, index: pd.DatetimeIndex) -> pd.DataFrame:
     eua = read_price_csv(eua_path) if Path(eua_path).exists() else pd.Series(dtype=float)
     if ccfg.get("eua_eex_auctions", False):
         auctions = eua_from_eex(ROOT / ccfg.get("eex_dir", "data/raw/eex"))
-        etc = _yahoo_close(ccfg.get("eua_etc_ticker", "CO2.L"), "2021-01-01",
+        etc = _yahoo_series(ccfg.get("eua_etc_ticker", "CO2.L"), "2021-01-01",
                            (end + pd.Timedelta(days=1)).strftime("%Y-%m-%d")) if ccfg.get("eua_etc_ticker") else pd.Series(dtype=float)
         filled, flag = eua_with_etc_fill(auctions, etc)
         log.info("EUA: %s auction days, %s ETC-filled days", len(auctions), int(flag.sum()))
@@ -332,7 +382,7 @@ def fetch_commodities(cfg: Config, index: pd.DatetimeIndex) -> pd.DataFrame:
 
     # --- Candidates (prefix cmd_: ignored by features.py until proven, D-15) ---
     if ccfg.get("coal_ticker"):
-        coal = _yahoo_close(ccfg["coal_ticker"], (start - pd.Timedelta(days=30)).strftime("%Y-%m-%d"),
+        coal = _yahoo_series(ccfg["coal_ticker"], (start - pd.Timedelta(days=30)).strftime("%Y-%m-%d"),
                             (end + pd.Timedelta(days=1)).strftime("%Y-%m-%d"))
         if not coal.empty:
             out["cmd_coal_api2"] = _daily_to_hourly(coal, index, lag)

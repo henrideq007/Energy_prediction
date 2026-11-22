@@ -49,7 +49,7 @@ def fetch_weather(cfg: Config, start: pd.Timestamp, end: pd.Timestamp, source: s
     today = pd.Timestamp.now(tz="UTC").normalize()
     hist_end = min(end, today - pd.Timedelta(days=ARCHIVE_LAG_DAYS))
     # Core Belgian points -> prefix w_ (used by features.py). Candidate points (e.g. France, DP-043)
-    # -> their own prefix (ignored by features.py until the ablation test, decisions D-15 / D-23).
+    # -> their own prefix (ignored by features.py until the ablation test, decisions D-15 / D-24).
     groups = [("w_", wcfg["locations"], wcfg["variables"])]
     cand = wcfg.get("candidate_locations") or {}
     if cand:

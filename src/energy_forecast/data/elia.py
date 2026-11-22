@@ -6,7 +6,7 @@ for leakage (decision D-16):
     dayahead11hforecast  issued on D-1 at 11:00               -> 1 h AFTER our issue time
     dayaheadforecast     latest day-ahead run (D-1 evening)   -> after our issue time
     measured             estimated actual production          -> lag-only
-Columns are prefixed `elia_` so features.py ignores them until Phase 3 decides (D-15, D-23).
+Columns are prefixed `elia_` so features.py ignores them until Phase 3 decides (D-15, D-24).
 
 Datasets (checked 3 Nov 2026 on opendata.elia.be):
     ods031  wind, historical, 15-min, from 2015, 5 rows per timestamp (offshore + region x grid) -> summed
