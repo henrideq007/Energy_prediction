@@ -1,0 +1,58 @@
+# D-16 leakage check without the laptop: are tomorrow's TSO forecasts published before the issue time?
+# Runs scripts/check_publication_times.py several times a day and keeps one growing CSV
+# in the GitHub release "pubtimes" (asset publication_times.csv).
+# Target local check times (Brussels): 09:45, 10:15, 11:05, 11:15, 12:00, 18:30.
+# GitHub cron is UTC and does not follow DST, so both the winter (CET) and summer (CEST)
+# schedules are listed; the script records the actual local time of each check.
+# GitHub may delay scheduled runs by a few minutes at busy times.
+name: Publication times (D-16)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # winter (CET = UTC+1)
+    - cron: "45 8 * * *"
+    - cron: "15 9 * * *"
+    - cron: "5 10 * * *"
+    - cron: "15 10 * * *"
+    - cron: "0 11 * * *"
+    - cron: "30 17 * * *"
+    # summer (CEST = UTC+2)
+    - cron: "45 7 * * *"
+    - cron: "15 8 * * *"
+    - cron: "5 9 * * *"
+    - cron: "15 9 * * *"
+    - cron: "0 10 * * *"
+    - cron: "30 16 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pubtimes
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Restore previous log
+        run: gh release download pubtimes -p publication_times.csv -D reports --clobber || echo "first run"
+      - name: Check
+        env:
+          ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
+        run: python scripts/check_publication_times.py
+      - name: Publish log
+        run: |
+          gh release view pubtimes >/dev/null 2>&1 || \
+            gh release create pubtimes --prerelease --title "Publication-time log (D-16)" --notes "Appended by publication-times.yml."
+          gh release upload pubtimes reports/publication_times.csv --clobber

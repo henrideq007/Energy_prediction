@@ -1,0 +1,62 @@
+# Weekly real-data refresh, so that cloud agents (which cannot reach ENTSO-E) can work on real data.
+#   fetch (ENTSO-E + Open-Meteo + TTF) -> validate -> train -> publish to GitHub releases
+#     data-latest   : dataset.parquet, dataset_clean.parquet, validation_report.md
+#     models-latest : models/*.joblib + *.json
+# Requires the repository secret ENTSOE_API_KEY (Settings > Secrets and variables > Actions).
+name: Fetch data & retrain
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 0"   # Sunday 03:17 UTC
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-data
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Restore manual CSVs (TTF fallback, EUA) from the previous release, if any
+        run: gh release download data-latest -p "*_prices.csv" -D data/external --clobber || echo "no CSVs yet"
+
+      - name: Fetch
+        env:
+          ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
+        run: python -m energy_forecast -v fetch
+
+      - name: Validate
+        run: python -m energy_forecast validate
+
+      - name: Train final models
+        run: python -m energy_forecast train
+
+      - name: Publish data release
+        run: |
+          gh release view data-latest >/dev/null 2>&1 || \
+            gh release create data-latest --prerelease --title "Data (latest)" \
+              --notes "Weekly refresh by fetch-data.yml. Sources: ENTSO-E Transparency Platform, Open-Meteo, Yahoo Finance (TTF). Regenerable; not for redistribution beyond this project."
+          gh release upload data-latest \
+            data/processed/dataset.parquet data/processed/dataset_clean.parquet reports/validation_report.md \
+            --clobber
+          ls data/external/*_prices.csv >/dev/null 2>&1 && gh release upload data-latest data/external/*_prices.csv --clobber || true
+
+      - name: Publish models release
+        run: |
+          gh release view models-latest >/dev/null 2>&1 || \
+            gh release create models-latest --prerelease --title "Models (latest)" --notes "Trained by fetch-data.yml on all history."
+          gh release upload models-latest models/*.joblib models/*.json --clobber
