@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from energy_forecast.config import Config
-from energy_forecast.features import leakage_check, make_xy
+from energy_forecast.features import leakage_check, make_xy, with_baseline_columns
 from energy_forecast.metrics import all_metrics
 from energy_forecast.models import get_model
 from energy_forecast.split import walk_forward
@@ -56,10 +56,11 @@ def run_backtest(cfg: Config, df: pd.DataFrame, targets: list[str] | None = None
         for name in _models_for(cfg, target, models):
             t0 = time.time()
             p_all = []
+            Xm = with_baseline_columns(X, df, name)  # fc_* only for the tso_forecast baseline (D-29)
             for fold in folds:
-                model = get_model(name, target, X.columns, random_state=cfg["random_state"])
-                model.fit(X.loc[fold.train_idx], y.loc[fold.train_idx])
-                p = pd.Series(model.predict(X.loc[fold.test_idx]), index=fold.test_idx)
+                model = get_model(name, target, Xm.columns, random_state=cfg["random_state"])
+                model.fit(Xm.loc[fold.train_idx], y.loc[fold.train_idx])
+                p = pd.Series(model.predict(Xm.loc[fold.test_idx]), index=fold.test_idx)
                 if target.startswith("gen_"):
                     p = p.clip(lower=0)  # production cannot be negative
                 p_all.append(p)

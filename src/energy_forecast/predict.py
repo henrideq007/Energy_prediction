@@ -14,7 +14,7 @@ import joblib
 import pandas as pd
 
 from energy_forecast.config import Config
-from energy_forecast.features import build_features
+from energy_forecast.features import baseline_frame, build_features
 from energy_forecast.validation import clean_and_validate
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,9 @@ def predict_from_frame(cfg: Config, df: pd.DataFrame, day: date) -> pd.DataFrame
     tz, fc = cfg.tz, cfg["forecast"]
     clean, _ = clean_and_validate(df, price_col=cfg["targets"]["price"])
     X = build_features(clean, tz=tz, min_lag_actuals=fc["min_lag_actuals_h"], min_lag_prices=fc["min_lag_prices_h"])
+    # a bundle trained as `tso_forecast` lists fc_* in its features: make them available (D-29)
+    b = baseline_frame(clean)
+    X = X.join(b[[c for c in b.columns if c not in X.columns]])
     d0 = pd.Timestamp(day).tz_localize(tz)
     rows = X.loc[(X.index >= d0.tz_convert("UTC")) & (X.index < (d0 + pd.Timedelta(days=1)).tz_convert("UTC"))]
     if rows.empty:

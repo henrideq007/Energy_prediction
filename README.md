@@ -2,7 +2,7 @@
 
 End-to-end machine-learning project that forecasts the **next 24 hours** of the Belgian day-ahead electricity **price** and **production** (total, solar, wind), using grid data (ENTSO-E), weather (Open-Meteo) and fuel/carbon prices.
 
-> Forecast issued on **D-1 at 10:00 (Brussels)**, before the 12:00 day-ahead auction, for the 24 delivery hours of day **D**.
+> Forecast issued on **D-1 at 11:00 (Brussels)**, before the 12:00 day-ahead auction, for the 24 delivery hours of day **D**.
 
 ```
 ENTSO-E ─┐                    ┌─ naive / seasonal naive / TSO forecast (baselines)
@@ -48,7 +48,7 @@ python -m energy_forecast demo
 copy .env.example .env             # then paste your ENTSO-E token in .env
 python -m energy_forecast -v fetch
 python -m energy_forecast validate
-python scripts\check_publication_times.py   # leakage check: are tomorrow's TSO forecasts out before 10:00? (D-16)
+python scripts\check_publication_times.py   # leakage check: are tomorrow's TSO forecasts out before the 11:00 issue time? (D-16)
 python -m energy_forecast -v backtest
 python -m energy_forecast train
 python -m energy_forecast explain

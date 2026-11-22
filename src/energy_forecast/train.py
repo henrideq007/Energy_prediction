@@ -10,7 +10,7 @@ import joblib
 import pandas as pd
 
 from energy_forecast.config import Config
-from energy_forecast.features import make_xy
+from energy_forecast.features import make_xy, with_baseline_columns
 from energy_forecast.models import get_model
 
 log = logging.getLogger(__name__)
@@ -35,9 +35,10 @@ def train_final(cfg: Config, df: pd.DataFrame, targets: list[str] | None = None,
     for target in targets:
         X, y = make_xy(df, target, tz=cfg.tz, min_lag_actuals=fc["min_lag_actuals_h"], min_lag_prices=fc["min_lag_prices_h"])
         name = model_override or pick_best(cfg, target)
-        model = get_model(name, target, X.columns, random_state=cfg["random_state"])
-        model.fit(X, y)
-        bundle = {"model": model, "features": list(X.columns), "target": target, "model_name": name}
+        Xm = with_baseline_columns(X, df, name)  # fc_* only for the tso_forecast baseline (D-29)
+        model = get_model(name, target, Xm.columns, random_state=cfg["random_state"])
+        model.fit(Xm, y)
+        bundle = {"model": model, "features": list(Xm.columns), "target": target, "model_name": name}
 
         if target == cfg["targets"]["price"]:
             # Prediction interval: LightGBM quantile models (P10 / P90)

@@ -66,3 +66,37 @@ def test_candidate_columns_do_not_enter_features():
     X = build_features(df)
     assert not [c for c in X.columns if c.startswith(("nb_", "unav_", "elia_", "xch_", "wfr_", "cmd_", "flag_"))]
     assert leakage_check(X) == []
+
+
+# --------------------------------------------------------------------------- D-29 (issue time 11:00)
+def _d29_frame():
+    idx = pd.date_range("2026-01-01", periods=24 * 10, freq="h", tz="UTC")
+    return pd.DataFrame({"price_da": 50.0, "gen_wind": 900.0, "load_forecast": 10000.0,
+                         "fc_solar": 100.0, "fc_wind": 1000.0, "fc_gen_total": 8000.0,  # Elia 6PM run
+                         "elia_solar_dayahead11hforecast": 120.0, "elia_wind_dayahead11hforecast": 950.0,
+                         "elia_wind_dayaheadforecast": 1000.0}, index=idx)
+
+
+def test_d29_fc_columns_never_enter_features_but_elia_11h_does():
+    from energy_forecast.features import build_features, leakage_check
+
+    X = build_features(_d29_frame())
+    assert not [c for c in X.columns if c.startswith("fc_")]
+    assert {"elia_solar_dayahead11hforecast", "elia_wind_dayahead11hforecast"} <= set(X.columns)
+    assert "elia_wind_dayaheadforecast" not in X.columns            # 6PM run stays out
+    assert (X["residual_load_fc"] == 10000.0 - 120.0 - 950.0).all()  # built from the 11AM run
+    assert leakage_check(X) == []
+    assert leakage_check(X.assign(fc_wind=1.0)) == ["fc_wind"]
+
+
+def test_d29_only_the_tso_baseline_gets_fc_columns():
+    from energy_forecast.features import build_features, with_baseline_columns
+    from energy_forecast.models import get_model
+
+    df = _d29_frame()
+    X = build_features(df)
+    assert with_baseline_columns(X, df, "lightgbm") is X
+    Xb = with_baseline_columns(X, df, "tso_forecast")
+    assert {"fc_solar", "fc_wind", "fc_gen_total"} <= set(Xb.columns)
+    m = get_model("tso_forecast", "gen_wind", Xb.columns).fit(Xb, df["gen_wind"])
+    assert (m.predict(Xb) == 1000.0).all()                            # copies the TSO forecast

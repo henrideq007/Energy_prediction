@@ -7,18 +7,20 @@
 | Market | Belgian bidding zone (BE), Single Day-Ahead Coupling (SDAC) |
 | Targets | `price_da` (EUR/MWh) · `gen_total`, `gen_solar`, `gen_wind` (MW) |
 | Horizon | 24 delivery hours of day **D** |
-| Issue time | **D-1 at 10:00 Europe/Brussels** (before the 12:00 SDAC gate closure) |
+| Issue time | **D-1 at 11:00 Europe/Brussels** (before the 12:00 SDAC gate closure; D-29, was 10:00 in D-02) |
 | Resolution | Hourly. Since 1 Oct 2025 SDAC clears 15-min products; we average to hourly for one consistent history. |
 
 Why this setup: it is the decision a real market participant faces — "what bid do I submit for tomorrow before noon?" — and it forces honest features.
 
 ## 2. Information available at issue time (anti-leakage rules)
 
-| Information | Known at D-1 10:00? | How it is used |
+| Information | Known at D-1 11:00? | How it is used |
 |---|---|---|
 | Day-ahead prices up to D-1 (BE + FR/NL/DE-LU) | Yes (auction on D-2) | lags ≥ 24h, D-1 daily stats |
-| Actual load / generation | Only up to ~D-1 09:00 | lags ≥ **48h** |
-| TSO day-ahead forecasts for D (load, wind, solar, total gen) | Yes | same-time features |
+| Actual load / generation | Only up to ~D-1 10:00 | lags ≥ **48h** |
+| TSO day-ahead load forecast for D (ENTSO-E A65) | Yes (due 2 h before gate closure) | same-time feature |
+| Elia wind/solar "day-ahead 11AM" run for D | Yes (published 11:00) | same-time features (D-29) |
+| ENTSO-E A69/A71 wind/solar/total-gen forecasts (`fc_*`) | **No** — it is Elia's 6PM run (D-29) | `tso_forecast` baseline only, never a feature |
 | Weather forecast for D | Yes | same-time features (backtest proxy: see §4) |
 | TTF gas / EUA carbon closes | Up to D-2 | shifted by 2 days |
 

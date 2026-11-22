@@ -1,13 +1,16 @@
 """Feature engineering with strict information-availability rules.
 
 Forecast setting (see docs/METHODOLOGY.md): forecasts for delivery day D are
-issued on D-1 at 10:00 Europe/Brussels, before the 12:00 SDAC gate closure.
+issued on D-1 at 11:00 Europe/Brussels (decision D-29), before the 12:00 SDAC gate closure.
 At that moment we know:
   * all day-ahead prices up to and including D-1   -> price lags >= 24h
-  * actual load / generation only up to ~D-1 09:00 -> actual lags >= 48h
-  * TSO day-ahead forecasts for D (load, wind, solar)  -> same-time features
+  * actual load / generation only up to ~D-1 10:00 -> actual lags >= 48h
+  * TSO day-ahead load forecast for D (A65)          -> same-time feature
+  * Elia wind/solar "day-ahead 11AM" run for D       -> same-time features (D-29)
   * weather forecasts for D                            -> same-time features
   * commodity closes up to D-2 (already shifted in data/commodities.py)
+NOT known: ENTSO-E A69/A71 day-ahead forecasts (`fc_*`) = Elia's 6PM run, published ~18:00 D-1
+(D-29). They are kept out of the feature matrix and only feed the `tso_forecast` baseline.
 Each row t of the output describes delivery hour t; the target is y(t).
 """
 
@@ -17,7 +20,13 @@ import holidays
 import numpy as np
 import pandas as pd
 
-KNOWN_AHEAD_PREFIXES = ("load_forecast", "fc_", "w_", "ttf_gas", "eua_carbon")
+KNOWN_AHEAD_PREFIXES = ("load_forecast", "w_", "ttf_gas", "eua_carbon")
+# Elia's wind/solar forecast run published at 11:00 D-1 = known at the 11:00 issue time (D-29)
+KNOWN_AHEAD_COLUMNS = ("elia_wind_dayahead11hforecast", "elia_solar_dayahead11hforecast",
+                       "elia_solar_dayahead11h_p10", "elia_solar_dayahead11h_p90")
+WIND_FC, SOLAR_FC = "elia_wind_dayahead11hforecast", "elia_solar_dayahead11hforecast"
+# Published after the issue time -> never a feature, only the input of the `tso_forecast` baseline (D-29)
+BASELINE_ONLY_PREFIXES = ("fc_",)
 PRICE_LAGS = (24, 48, 72, 168)
 ACTUAL_LAGS = (48, 72, 168)
 
@@ -80,14 +89,16 @@ def build_features(df: pd.DataFrame, tz: str = "Europe/Brussels", min_lag_actual
         feats.append(_daily_stats(df["load_actual"], tz, 2, "load_actual")[["load_actual_d2_mean", "load_actual_d2_max"]])
 
     # Same-time information that is genuinely known before the auction
-    known = [c for c in df.columns if c.startswith(KNOWN_AHEAD_PREFIXES)]
+    known = [c for c in df.columns if c.startswith(KNOWN_AHEAD_PREFIXES) or c in KNOWN_AHEAD_COLUMNS]
     feats.append(df[known])
 
     X = pd.concat(feats, axis=1)
     # Fundamental drivers: residual load = what conventional plants must cover
-    if {"load_forecast", "fc_solar", "fc_wind"}.issubset(df.columns):
-        X["residual_load_fc"] = df["load_forecast"] - df["fc_solar"].fillna(0) - df["fc_wind"].fillna(0)
-        X["res_share_fc"] = (df["fc_solar"].fillna(0) + df["fc_wind"].fillna(0)) / df["load_forecast"]
+    # leakage-safe inputs only (Elia 11AM run); NaN where Elia has no history (solar before Oct 2020)
+    if {"load_forecast", SOLAR_FC, WIND_FC}.issubset(df.columns):
+        res = df[SOLAR_FC] + df[WIND_FC]
+        X["residual_load_fc"] = df["load_forecast"] - res
+        X["res_share_fc"] = res / df["load_forecast"]
     if {"ttf_gas", "eua_carbon"}.issubset(df.columns):
         # Approx. short-run marginal cost of a CCGT (efficiency ~50%, 0.37 tCO2/MWh_el)
         X["ccgt_srmc"] = df["ttf_gas"] / 0.5 + 0.37 * df["eua_carbon"]
@@ -101,6 +112,19 @@ def make_xy(df: pd.DataFrame, target: str, tz: str = "Europe/Brussels", **kw) ->
     return X.loc[mask], y.loc[mask]
 
 
+def baseline_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Columns only the `tso_forecast` baseline may read (published after the issue time, D-29)."""
+    return df[[c for c in df.columns if c.startswith(BASELINE_ONLY_PREFIXES)]]
+
+
+def with_baseline_columns(X: pd.DataFrame, df: pd.DataFrame, model_name: str) -> pd.DataFrame:
+    """X for `model_name`: the TSO baseline also gets the `fc_*` columns; learning models never do."""
+    if model_name != "tso_forecast":
+        return X
+    b = baseline_frame(df).reindex(X.index)
+    return X.join(b[[c for c in b.columns if c not in X.columns]])
+
+
 def leakage_check(X: pd.DataFrame) -> list[str]:
     """Return any column that looks like a same-time actual (should be empty)."""
     bad = []
@@ -108,6 +132,6 @@ def leakage_check(X: pd.DataFrame) -> list[str]:
         if c.startswith(("price_da", "load_actual", "gen_")) and "_lag" not in c and "_d1_" not in c \
                 and "_d2_" not in c and "roll" not in c:
             bad.append(c)
-        if c.startswith("flag_"):
+        if c.startswith("flag_") or c.startswith(BASELINE_ONLY_PREFIXES):
             bad.append(c)
     return bad

@@ -22,7 +22,7 @@ All sources are free. Everything is downloaded by `python -m energy_forecast -v 
 | Source | Data | Columns |
 |---|---|---|
 | ENTSO-E (FR, NL, DE-LU) | Load forecast & actual, wind/solar forecast, generation forecast, FR nuclear generation (DP-029..036) | `nb_<zone>_*` |
-| ENTSO-E outages (A80) | Nuclear unit unavailability BE & FR **as known at D-1 10:00**, from the full revision history (D-27). BE only from 2022 (no earlier messages on ENTSO-E) | `unav_BE_nuclear_mw`, `unav_FR_nuclear_mw` |
+| ENTSO-E outages (A80) | Nuclear unit unavailability BE & FR **as known at the D-1 issue time (11:00, D-29)**, from the full revision history (D-27). BE only from 2022 (no earlier messages on ENTSO-E) | `unav_BE_nuclear_mw`, `unav_FR_nuclear_mw` |
 | ENTSO-E exchanges | Day-ahead scheduled exchanges BE↔FR/NL/DE-LU/GB, BE net position (auction results → lag only) | `xch_*` |
 | ENTSO-E capacity / hydro | BE installed capacity per type (yearly), FR & CH reservoir filling (weekly) | `cap_BE_*`, `hydro_res_*` |
 | [JAO Core](https://publicationtool.jao.eu/core) (`jao-py`) | Flow-based BE min/max net position, from Jun 2022 (DP-040) | `fb_BE_min_np`, `fb_BE_max_np` |
@@ -48,7 +48,7 @@ day-ahead, EPEX curves (paid, D-17).
 ## Publication-time check (decision D-16)
 Run `python scripts/check_publication_times.py` at 09:00, 09:45, 10:15, 12:00 and 18:30 on a few days.
 Each run appends to `reports/publication_times.csv` whether tomorrow's forecasts are already published.
-Only series available before 10:00 may be used as same-time features.
+Only series available before the 11:00 issue time (D-29) may be used as same-time features.
 
 ## Known data quirks
 - Pumped storage (and sometimes offshore wind) is left EMPTY by ENTSO-E when it does not generate → treated as 0.

@@ -79,7 +79,7 @@ jao:                               # DP-040 candidate: Core flow-based BE min/ma
   request_sleep_s: 0.2
 
 forecast:
-  issue_hour_local: 10             # forecast issued on D-1 at 10:00 (before 12:00 SDAC gate closure)
+  issue_hour_local: 11             # D-29: issued on D-1 at 11:00 (Elia 11AM wind/solar run; SDAC gate closure 12:00)
   horizon_hours: 24
   min_lag_actuals_h: 48            # actual load/generation for D-1 afternoon is NOT known at issue time
   min_lag_prices_h: 24             # D-1 day-ahead prices are known (auction on D-2)
