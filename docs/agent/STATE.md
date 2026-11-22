@@ -3,7 +3,7 @@
 > Read at the start of every run. Rewrite the "Current" sections at the end of every run.
 > Keep it short (< 80 lines). History goes to `docs/agent/journal/`, not here.
 
-_Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29)_
+_Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29; data-cache sharing)_
 
 ## Current phase
 **Phase 1 — Data collection: almost done** (2 of 3 exit criteria met) → next: Phase 2 — Cleaning, validation & EDA.
@@ -26,7 +26,10 @@ _Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29)_
     after Dec 2025).
 - Dropped for v1: Open-Meteo ensemble (3 months of history only), coal (DP-047), paid data (D-17).
 - Old backtest/leaderboard numbers were computed with leaky `fc_*` features → **invalid, re-run**.
-- Real data is not yet in the `data-latest` release (needs `fetch-data.yml` + secret `ENTSOE_API_KEY`).
+- Data sharing: release `data-latest` holds `raw-cache.tar.gz` (data/raw + data/external) and the dataset.
+  Bootstrap once from the laptop (`python scripts/publish_data.py publish`); then `fetch-data.yml`
+  restores the cache every Sunday, downloads only recent chunks, retrains and republishes.
+  Agents read it with `python scripts/publish_data.py restore`. Secret `ENTSOE_API_KEY` is set.
 
 ## Open questions (Henri decides)
 - Publication times still unverified for: BE load forecast A65 (due 10:00), neighbours' A65/A69/A71,
@@ -34,16 +37,15 @@ _Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29)_
   must cover ~2 weeks first.
 - BE nuclear outages before 2022 do not exist on ENTSO-E: use proxy `cap_BE_nuclear − gen_nuclear`
   (lag ≥ 48 h) or train nuclear-aware models on 2022+ only?
-- `fetch-data.yml` from an empty cache now takes several hours (outage history per mRID, neighbours,
-  JAO, Elia): raise `timeout-minutes` / cache `data/raw` between runs, or keep heavy fetches on the laptop?
 
 ## Next tasks (mirror of Notion, highest priority first)
-1. Re-run the walk-forward backtest with the D-29 features (old results invalid).
-2. Analyse the `pubtimes` log → confirm/adjust same-time use of A65, neighbours, THE, JAO.
-3. Phase 3 prep: publication lags for candidate families (xch ≥ 24–48 h, hydro_res ≥ 1 week, nb actuals ≥ 48 h).
+1. [agent] Re-run the walk-forward backtest with the D-29 features (old results invalid).
+2. [agent] Extend `scripts/check_publication_times.py` to the Elia 11AM run, THE gas and JAO;
+   then analyse the `pubtimes` log → confirm/adjust same-time use of A65, neighbours, THE, JAO.
+3. [agent] Phase 3 prep: publication lags for candidate families (xch ≥ 24–48 h, hydro_res ≥ 1 week, nb actuals ≥ 48 h).
 4. Live path: Elia historical datasets lag ~2 days → near-real-time datasets (ods086 wind) for `predict_live`.
 5. Henri: free AGSI+ key (`AGSI_API_KEY`), EEX 2026 auction xlsx → `data/raw/eex/`.
-6. Phase 2: EDA insights (3–5) → Notion Phase 2 page; ablation per driver family (D-15).
+6. [agent] Phase 2: EDA insights (3–5) → Notion Phase 2 page; ablation per driver family (D-15).
 
 ## Last run
 2026-11-22 (interactive, Henri + Claude): merged origin/main (agent setup, Yahoo TTF cache) into the

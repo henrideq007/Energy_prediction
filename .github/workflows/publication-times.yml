@@ -1,7 +1,8 @@
 # D-16 leakage check without the laptop: are tomorrow's TSO forecasts published before the issue time?
 # Runs scripts/check_publication_times.py several times a day and keeps one growing CSV
 # in the GitHub release "pubtimes" (asset publication_times.csv).
-# Target local check times (Brussels): 09:45, 10:15, 11:05, 11:15, 12:00, 18:30.
+# Target local check times (Brussels): 09:45, 10:15, 10:50 (just before the D-29 11:00 cut-off),
+# 11:05, 11:15, 12:00, 18:30.
 # GitHub cron is UTC and does not follow DST, so both the winter (CET) and summer (CEST)
 # schedules are listed; the script records the actual local time of each check.
 # GitHub may delay scheduled runs by a few minutes at busy times.
@@ -13,6 +14,7 @@ on:
     # winter (CET = UTC+1)
     - cron: "45 8 * * *"
     - cron: "15 9 * * *"
+    - cron: "50 9 * * *"
     - cron: "5 10 * * *"
     - cron: "15 10 * * *"
     - cron: "0 11 * * *"
@@ -20,6 +22,7 @@ on:
     # summer (CEST = UTC+2)
     - cron: "45 7 * * *"
     - cron: "15 8 * * *"
+    - cron: "50 8 * * *"
     - cron: "5 9 * * *"
     - cron: "15 9 * * *"
     - cron: "0 10 * * *"
@@ -71,7 +74,10 @@ jobs:
 
       - name: Report the error (visible in the run summary)
         if: failure()
+        env:
+          ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
         run: |
           [ -f run.log ] || exit 0
+          [ -n "$ENTSOE_API_KEY" ] && sed -i "s/${ENTSOE_API_KEY}/***/g" run.log
           msg=$(tail -n 25 run.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
           echo "::error title=Last log lines::${msg}"

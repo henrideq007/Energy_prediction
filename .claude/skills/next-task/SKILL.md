@@ -14,19 +14,25 @@ pip install -r requirements.txt -q
 pytest -q          # baseline must be green; if red on main: stop, notify Henri
 ```
 Read `CLAUDE.md`, `docs/agent/STATE.md`, the latest `docs/agent/journal/*.md`.
+Get the real data: `python scripts/publish_data.py restore` (if the release is missing, only
+tasks that don't need real data can be done — say so in the journal).
 ✅ Checkpoint: main is green and you know the current phase.
 
 ## Step 1 — Pending reviews first
 `gh api "repos/henrideq007/Energy_prediction/pulls?state=open" --jq '.[] | select(.head.ref|startswith("agent/")) | "\(.number) \(.head.ref)"'`
 then `gh api repos/henrideq007/Energy_prediction/pulls/<n>/comments` and `.../issues/<n>/comments`
-— if a PR has review comments from Henri
-asking for changes, that PR is this run's task: check out its branch, address the comments,
-go to Step 4.
+— if a PR has review comments from Henri asking for changes, that PR is this run's task:
+check out its branch, address the comments, go to Step 4.
+If **2 or more** agent PRs are open with no change request, stop here: notify Henri
+(`Énergie ⏸️ 2 PR en attente de relecture — rien de nouveau lancé`) and end the run.
+Read the journal/STATE of open agent branches (`git fetch origin <branch>` +
+`git show origin/<branch>:docs/agent/STATE.md`) so you don't redo work in flight.
 
 ## Step 2 — Pick the task
 Query Notion All Tasks (`collection://3f203feb-d6db-4491-bde5-4bcfb9fd56c4`):
 `Owner = Agent` AND `Status = To do`; order by phase (current phase first), Priority
-(High > Medium > Low), ID ascending. Take the first one.
+(High > Medium > Low), ID ascending. Take the first one not already covered by an open PR.
+If Notion is unreachable: take the first `[agent]` item of STATE.md "Next tasks" and note it.
 - None → journal "nothing to do", propose up to 3 tasks in STATE.md "Next tasks"
   (do not create them as `To do`; create them in Notion as `Backlog`, `Owner = Agent`),
   notify Henri, stop.
