@@ -4,5 +4,6 @@
   "python.testing.pytestArgs": ["tests"],
   "python.terminal.activateEnvironment": true,
   "files.exclude": { "**/__pycache__": true, "**/*.egg-info": true },
-  "jupyter.interactiveWindow.textEditor.executeSelection": true
+  "jupyter.interactiveWindow.textEditor.executeSelection": true,
+  "python.terminal.useEnvFile": true
 }
