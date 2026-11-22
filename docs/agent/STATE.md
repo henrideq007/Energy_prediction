@@ -27,7 +27,8 @@ _Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29; data-cache sh
 - Dropped for v1: Open-Meteo ensemble (3 months of history only), coal (DP-047), paid data (D-17).
 - Old backtest/leaderboard numbers were computed with leaky `fc_*` features → **invalid, re-run**.
 - Data sharing: release `data-latest` holds `raw-cache.tar.gz` (data/raw + data/external) and the dataset.
-  Bootstrap once from the laptop (`python scripts/publish_data.py publish`); then `fetch-data.yml`
+  Bootstrapped from the laptop on 2026-11-22 (dataset 2019 → 2026-11-05, cache 81 MB; raw EEX files
+  excluded from the public release, re-downloaded by the fetch); then `fetch-data.yml`
   restores the cache every Sunday, downloads only recent chunks, retrains and republishes.
   Agents read it with `python scripts/publish_data.py restore`. Secret `ENTSOE_API_KEY` is set.
 
