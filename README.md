@@ -62,6 +62,17 @@ Tip: the folder is inside OneDrive — the `.venv` folder contains thousands of 
 
 VS Code: open the folder, accept the recommended extensions, select the `.venv` interpreter. `Run and Debug` has ready-made launch configs (Demo, Fetch, Backtest, Predict, API). `notebooks/01_eda.py` runs cell by cell (`# %%`).
 
+## Automation (runs without the laptop)
+
+| What | How | When |
+|---|---|---|
+| Real-data refresh + retrain → releases `data-latest`, `models-latest` | `.github/workflows/fetch-data.yml` | weekly (Sunday) |
+| Publication-time log of D-1 TSO forecasts (D-16) → release `pubtimes` | `.github/workflows/publication-times.yml` | 6× per day |
+| Live forecast for tomorrow → release `forecasts` | `.github/workflows/daily-forecast.yml` | 11:11 Brussels, off until `DAILY_FORECAST_ENABLED=true` |
+| Project development (one Notion task → one PR) | Claude Code agents: `CLAUDE.md`, `.claude/agents/`, `.claude/skills/next-task`, rules in `docs/agent/RUNBOOK.md` | nightly scheduled task ([`docs/agent/SCHEDULED_TASK.md`](docs/agent/SCHEDULED_TASK.md)) |
+
+Agents never merge: every change arrives as a pull request reviewed by Henri.
+
 ## Repository layout
 
 ```

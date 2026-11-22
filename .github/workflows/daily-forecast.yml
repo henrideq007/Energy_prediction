@@ -1,29 +1,65 @@
-# Phase 5 (optional): produce tomorrow's forecast every day in the cloud.
-# 1. Add the repository secret ENTSOE_API_KEY (Settings > Secrets and variables > Actions)
-# 2. Commit trained models or add a training step
-# 3. Uncomment the schedule below
+# Phase 5: produce tomorrow's 24h forecast every day in the cloud, at 11:11 Brussels on D-1
+# (Henri's provisional issue time, 16 Nov 2026 — to confirm with the publication-time log).
+#
+# OFF by default. To switch it on, once a real backtest has validated the models:
+#   Settings > Secrets and variables > Actions > Variables > New repository variable
+#   DAILY_FORECAST_ENABLED = true
+# Needs: secret ENTSOE_API_KEY and the "models-latest" release (built by fetch-data.yml).
+# Each forecast is uploaded to the release "forecasts" (forecast_<D>.csv / .json) to keep a
+# live track record for monitoring (Phase 5 exit criterion: 30 days logged).
 name: Daily forecast
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "17 8 * * *"   # 08:17 UTC = ~10:00 Brussels, before the 12:00 auction
+  schedule:
+    - cron: "11 10 * * *"   # 11:11 Brussels in winter (CET)
+    - cron: "11 9 * * *"    # 11:11 Brussels in summer (CEST)
+
+permissions:
+  contents: write
 
 jobs:
   forecast:
+    if: ${{ vars.DAILY_FORECAST_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Keep only the run that matches 11:xx Brussels (DST)
+        id: gate
+        run: |
+          H=$(TZ=Europe/Brussels date +%H)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$H" != "11" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "Local hour is $H — skipping (other DST slot)."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt
+      - if: steps.gate.outputs.run == 'true'
+        run: pip install -r requirements.txt
+      - name: Get trained models
+        if: steps.gate.outputs.run == 'true'
+        run: gh release download models-latest -D models --clobber
       - name: Forecast
+        if: steps.gate.outputs.run == 'true'
         env:
           ENTSOE_API_KEY: ${{ secrets.ENTSOE_API_KEY }}
-        run: python -m energy_forecast predict
+        run: python -m energy_forecast -v predict
+      - name: Publish forecast
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          gh release view forecasts >/dev/null 2>&1 || \
+            gh release create forecasts --prerelease --title "Live forecasts" --notes "One file per delivery day, by daily-forecast.yml."
+          gh release upload forecasts forecasts/forecast_*.csv forecasts/forecast_*.json --clobber
       - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.run == 'true'
         with:
           name: forecast
           path: forecasts/
