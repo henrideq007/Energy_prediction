@@ -25,7 +25,11 @@ _Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29; data-cache sh
     `hydro_res_*`, `elia_*` other runs (D-28), `wfr_*` (France temperature), `cmd_coal_api2` (dead
     after Dec 2025).
 - Dropped for v1: Open-Meteo ensemble (3 months of history only), coal (DP-047), paid data (D-17).
-- Old backtest/leaderboard numbers were computed with leaky `fc_*` features → **invalid, re-run**.
+- **Backtest after D-29 done** (Henri, run `20261122-1954-8772`, walk-forward Nov 2025 → Oct 2026,
+  `reports/leaderboard.md`). Price: XGBoost MAE 17.99 €/MWh, rMAE 0.49 (LightGBM 18.13; naive_day 28.87).
+  Wind: LightGBM 207 MW beats `tso_forecast` 244. Solar (175 vs 168) and total (716 vs 566): `tso_forecast`
+  still best — but it is the 18:00 run, not available at 11:00, so it is an upper bound, not a fair
+  baseline (see T50). Pre-D-29 results are invalid.
 - Data sharing: release `data-latest` holds `raw-cache.tar.gz` (data/raw + data/external) and the dataset.
   Bootstrapped from the laptop on 2026-11-22 (dataset 2019 → 2026-11-05, cache 81 MB; raw EEX files
   excluded from the public release, re-downloaded by the fetch); then `fetch-data.yml`
@@ -40,13 +44,12 @@ _Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29; data-cache sh
   (lag ≥ 48 h) or train nuclear-aware models on 2022+ only?
 
 ## Next tasks (mirror of Notion, highest priority first)
-1. [agent] Re-run the walk-forward backtest with the D-29 features (old results invalid).
-2. [agent] Extend `scripts/check_publication_times.py` to the Elia 11AM run, THE gas and JAO;
+1. [agent] Extend `scripts/check_publication_times.py` to the Elia 11AM run, THE gas and JAO;
    then analyse the `pubtimes` log → confirm/adjust same-time use of A65, neighbours, THE, JAO.
-3. [agent] Phase 3 prep: publication lags for candidate families (xch ≥ 24–48 h, hydro_res ≥ 1 week, nb actuals ≥ 48 h).
-4. Live path: Elia historical datasets lag ~2 days → near-real-time datasets (ods086 wind) for `predict_live`.
-5. Henri: free AGSI+ key (`AGSI_API_KEY`), EEX 2026 auction xlsx → `data/raw/eex/`.
-6. [agent] Phase 2: EDA insights (3–5) → Notion Phase 2 page; ablation per driver family (D-15).
+2. [agent] Phase 3 prep: publication lags for candidate families (xch ≥ 24–48 h, hydro_res ≥ 1 week, nb actuals ≥ 48 h).
+3. Live path: Elia historical datasets lag ~2 days → near-real-time datasets (ods086 wind) for `predict_live`.
+4. Henri: free AGSI+ key (`AGSI_API_KEY`), EEX 2026 auction xlsx → `data/raw/eex/`.
+5. [agent] Phase 2: EDA insights (3–5) → Notion Phase 2 page; ablation per driver family (D-15).
 
 ## Last run
 2026-11-22 (interactive, Henri + Claude): merged origin/main (agent setup, Yahoo TTF cache) into the
