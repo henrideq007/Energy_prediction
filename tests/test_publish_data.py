@@ -40,3 +40,15 @@ def test_extract_ignores_paths_outside_data(tmp_path):
     publish_data.extract_archive(evil, dst)
     assert (dst / "data" / "raw" / "ok.txt").exists()
     assert not (dst / "src").exists()
+
+
+def test_eex_reports_are_not_published(tmp_path):
+    src = tmp_path / "src"
+    (src / "data" / "raw" / "eex").mkdir(parents=True)
+    (src / "data" / "raw" / "eex" / "emission-spot-primary-market-auction-report-2025-data.xlsx").write_bytes(b"x")
+    (src / "data" / "raw" / "elia").mkdir(parents=True)
+    (src / "data" / "raw" / "elia" / "wind_ods031_2025.parquet").write_bytes(b"x")
+
+    names = tarfile.open(publish_data.build_archive(src, tmp_path / "cache.tar.gz")).getnames()
+    assert not any(n.startswith("data/raw/eex") for n in names)
+    assert "data/raw/elia/wind_ods031_2025.parquet" in names

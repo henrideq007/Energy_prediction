@@ -33,8 +33,17 @@ NOTES = ("Data cache shared by the laptop, GitHub Actions (fetch-data.yml) and t
          "Regenerable with `energy-forecast fetch`.")
 
 
+# Not republished in the PUBLIC release: EEX terms do not clearly allow redistributing its raw
+# auction reports. The fetch re-downloads them from eex.com automatically (commodities._ensure_eex_reports).
+EXCLUDE_DIRS = ("data/raw/eex",)
+
+
 def _skip(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
-    return None if info.name.endswith(".gitkeep") else info
+    if info.name.endswith(".gitkeep"):
+        return None
+    if any(info.name == d or info.name.startswith(d + "/") for d in EXCLUDE_DIRS):
+        return None
+    return info
 
 
 def build_archive(root: Path = ROOT, archive: Path = ARCHIVE) -> Path:
