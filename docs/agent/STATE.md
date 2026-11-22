@@ -3,34 +3,49 @@
 > Read at the start of every run. Rewrite the "Current" sections at the end of every run.
 > Keep it short (< 80 lines). History goes to `docs/agent/journal/`, not here.
 
-_Last updated: 2026-11-22 by Henri + Claude (initial setup)_
+_Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29)_
 
 ## Current phase
-**Phase 1 — Data collection** (finishing) → Phase 2 — Cleaning, validation & EDA.
+**Phase 1 — Data collection: almost done** (2 of 3 exit criteria met) → next: Phase 2 — Cleaning, validation & EDA.
 
 ## What is true right now
-- Code exists for every phase; unit tests pass; `demo` runs on synthetic data.
-- First real ENTSO-E fetch done on Henri's laptop (2019-01-01 → 2026-10-27, 68,568 hourly rows).
-  Validation report: `reports/validation_report.md`.
-- TTF gas via yfinance is unreliable → CSV fallback (`data/external/ttf_prices.csv`) to finish.
-- `gen_hydro` still ~29% missing after cleaning (D-20).
-- Real data is not yet in the `data-latest` release until `fetch-data.yml` has run once
-  (needs repository secret `ENTSOE_API_KEY`).
+- `dataset.parquet` (laptop): 68,784 h × 92 columns, 2019-01-01 → 2026-11-05. All 35 core columns
+  < 2% missing (max 0.07%) — `reports/data_coverage.md`. `gen_hydro` fixed (0.03% missing, D-20).
+- **Issue time = D-1 11:00 Brussels** (D-29, accepted, `forecast.issue_hour_local: 11`).
+  Wind/solar same-time features = Elia "day-ahead 11AM" run (`elia_*_dayahead11hforecast`).
+  ENTSO-E `fc_*` (= Elia 6PM run, published ~18:00 D-1) are **baseline-only** (`tso_forecast`);
+  `features.leakage_check()` rejects them. The cloud forecast job runs at 11:11 (after the cut-off).
+- Sources added in Phase 1 (decisions D-23..D-28, see `docs/DATA_SOURCES.md`):
+  - Gas `ttf_gas`: Yahoo `TTF=F` + local cache (D-23) > manual CSV > THE daily hub price (Oct 2021 →)
+    > IMF monthly back-fill (2019 → Sep 2021, flagged) (D-25). Yahoo only serves recent quotes.
+  - Carbon `eua_carbon`: EEX EU ETS auction results 2018–2025 + `CO2.L` ETC × ratio for gaps/2026 (D-26).
+  - Candidates, stored but ignored by `features.py` until an ablation test (D-24): `nb_*` (FR/NL/DE-LU
+    load/wind/solar/gen forecasts), `unav_*_nuclear_mw` (outages as known at the issue time from the
+    full revision history, D-27; BE only from 2022), `xch_*`, `fb_BE_*` (JAO, Jun 2022 →), `cap_BE_*`,
+    `hydro_res_*`, `elia_*` other runs (D-28), `wfr_*` (France temperature), `cmd_coal_api2` (dead
+    after Dec 2025).
+- Dropped for v1: Open-Meteo ensemble (3 months of history only), coal (DP-047), paid data (D-17).
+- Old backtest/leaderboard numbers were computed with leaky `fc_*` features → **invalid, re-run**.
+- Real data is not yet in the `data-latest` release (needs `fetch-data.yml` + secret `ENTSOE_API_KEY`).
 
 ## Open questions (Henri decides)
-- **Issue time**: Henri provisionally chose **11:11 Brussels on D-1** (16 Nov 2026) instead of
-  10:00, so that data published at 11:00 is available. Not yet in `config.yaml`
-  (`forecast.issue_hour_local: 10`) nor in `docs/DECISIONS.md`. Confirm once the
-  publication-time log (release `pubtimes`) has ~2 weeks of data → then log as D-23.
-- **Leakage risk (D-16)**: legal deadline for DA wind/solar & generation forecasts is 18:00 D-1.
-  Which `fc_*` series are really published before the issue time?
+- Publication times still unverified for: BE load forecast A65 (due 10:00), neighbours' A65/A69/A71,
+  THE daily gas price, JAO final Core domain. The `publication-times.yml` log (release `pubtimes`)
+  must cover ~2 weeks first.
+- BE nuclear outages before 2022 do not exist on ENTSO-E: use proxy `cap_BE_nuclear − gen_nuclear`
+  (lag ≥ 48 h) or train nuclear-aware models on 2022+ only?
+- `fetch-data.yml` from an empty cache now takes several hours (outage history per mRID, neighbours,
+  JAO, Elia): raise `timeout-minutes` / cache `data/raw` between runs, or keep heavy fetches on the laptop?
 
 ## Next tasks (mirror of Notion, highest priority first)
-1. Collect ~2 weeks of publication times (workflow `publication-times.yml`) → analyse → propose D-23.
-2. TTF CSV fallback + EUA CSV → update Data Point Inventory availability.
-3. Extend the ENTSO-E loader to neighbours' fundamentals (FR nuclear availability, D-18).
-4. EDA insights (3–5) → Notion Phase 2 page.
-5. Real walk-forward backtest + ablation per driver family.
+1. Re-run the walk-forward backtest with the D-29 features (old results invalid).
+2. Analyse the `pubtimes` log → confirm/adjust same-time use of A65, neighbours, THE, JAO.
+3. Phase 3 prep: publication lags for candidate families (xch ≥ 24–48 h, hydro_res ≥ 1 week, nb actuals ≥ 48 h).
+4. Live path: Elia historical datasets lag ~2 days → near-real-time datasets (ods086 wind) for `predict_live`.
+5. Henri: free AGSI+ key (`AGSI_API_KEY`), EEX 2026 auction xlsx → `data/raw/eex/`.
+6. Phase 2: EDA insights (3–5) → Notion Phase 2 page; ablation per driver family (D-15).
 
 ## Last run
-_None yet._
+2026-11-22 (interactive, Henri + Claude): merged origin/main (agent setup, Yahoo TTF cache) into the
+Phase 1 work, renumbered local decisions to D-24..D-29, implemented D-29. 34 tests green. Pushed to `main`
+with Henri's explicit one-off authorisation.
