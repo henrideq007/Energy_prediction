@@ -3,7 +3,7 @@
 > Read at the start of every run. Rewrite the "Current" sections at the end of every run.
 > Keep it short (< 80 lines). History goes to `docs/agent/journal/`, not here.
 
-_Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29; data-cache sharing)_
+_Last updated: 2026-11-23 by agent (T52, PR #6)_
 
 ## Current phase
 **Phase 1 — Data collection: almost done** (2 of 3 exit criteria met) → next: Phase 2 — Cleaning, validation & EDA.
@@ -37,21 +37,25 @@ _Last updated: 2026-11-22 by Henri + Claude (Phase 1 merge + D-29; data-cache sh
   Agents read it with `python scripts/publish_data.py restore`. Secret `ENTSOE_API_KEY` is set.
 
 ## Open questions (Henri decides)
-- Publication times still unverified for: BE load forecast A65 (due 10:00), neighbours' A65/A69/A71,
-  THE daily gas price, JAO final Core domain. The `publication-times.yml` log (release `pubtimes`)
-  must cover ~2 weeks first.
+- Publication times still unverified for: Elia 11AM run, BE load forecast A65 (due 10:00), neighbours'
+  A65/A69/A71, THE daily gas price, JAO final Core domain. Log (release `pubtimes`) = 48 rows, 3 checks
+  all after 18:00 → insufficient; needs ~2 weeks (PR #6 adds the series + `--summarise`).
+- The Elia 11AM run is issued *at* 11:00 → likely "after cut-off" under strict D-16. Once the log is
+  sufficient: cut-off = live-job time 11:11, or fall back to another run? (no decision proposed yet)
+- `config.yaml` comment on `commodities.publication_lag_days` still says D-1 10:00 (should be 11:00).
 - BE nuclear outages before 2022 do not exist on ENTSO-E: use proxy `cap_BE_nuclear − gen_nuclear`
   (lag ≥ 48 h) or train nuclear-aware models on 2022+ only?
 
 ## Next tasks (mirror of Notion, highest priority first)
-1. [agent] Extend `scripts/check_publication_times.py` to the Elia 11AM run, THE gas and JAO;
-   then analyse the `pubtimes` log → confirm/adjust same-time use of A65, neighbours, THE, JAO.
+1. T52 pubtimes extension: in PR #6 (Needs review), then analysis after ~2 weeks of log —
+   [agent] follow-up task (Backlog, earliest ~2026-12-07): `--summarise` at 11:00 and 11:11, propose
+   decision; first check CI confirms Elia `ods086`/`ods087` IDs.
 2. [agent] Phase 3 prep: publication lags for candidate families (xch ≥ 24–48 h, hydro_res ≥ 1 week, nb actuals ≥ 48 h).
 3. Live path: Elia historical datasets lag ~2 days → near-real-time datasets (ods086 wind) for `predict_live`.
 4. Henri: free AGSI+ key (`AGSI_API_KEY`), EEX 2026 auction xlsx → `data/raw/eex/`.
 5. [agent] Phase 2: EDA insights (3–5) → Notion Phase 2 page; ablation per driver family (D-15).
 
 ## Last run
-2026-11-22 (interactive, Henri + Claude): merged origin/main (agent setup, Yahoo TTF cache) into the
-Phase 1 work, renumbered local decisions to D-24..D-29, implemented D-29. 34 tests green. Pushed to `main`
-with Henri's explicit one-off authorisation.
+2026-11-23 (scheduled, agent): T52 — `src/energy_forecast/pubtimes.py` (Elia 11AM/day-ahead, THE, JAO
+checks; `--summarise`), 61 tests green, reviewer APPROVE after DST fix. PR #6, task Needs review.
+Journal: `docs/agent/journal/2026-11-23.md`.
