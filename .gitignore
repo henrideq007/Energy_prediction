@@ -21,6 +21,9 @@ forecasts/*
 !forecasts/.gitkeep
 reports/*.parquet
 reports/cache/
+# D-16 publication-time log lives in the release `pubtimes`
+reports/publication_times*.csv
+reports/publication_times_summary.md
 
 # OS / editors
 .DS_Store

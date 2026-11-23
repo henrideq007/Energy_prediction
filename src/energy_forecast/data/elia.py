@@ -2,8 +2,8 @@
 
 DP-027 (solar) and DP-028 (wind). Each dataset carries several forecast RUNS, which matters
 for leakage (decision D-16):
-    weekaheadforecast    issued about a week before delivery  -> safely known at D-1 10:00
-    dayahead11hforecast  issued on D-1 at 11:00               -> 1 h AFTER our issue time
+    weekaheadforecast    issued about a week before delivery  -> safely known at D-1 11:00
+    dayahead11hforecast  issued on D-1 at 11:00               -> same-time feature per D-29, pending the D-16 check (T52)
     dayaheadforecast     latest day-ahead run (D-1 evening)   -> after our issue time
     measured             estimated actual production          -> lag-only
 Columns are prefixed `elia_` so features.py ignores them until Phase 3 decides (D-15, D-24).

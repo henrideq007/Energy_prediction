@@ -153,6 +153,26 @@ def _merge_with_cache(fresh: pd.Series, cache_path: Path) -> pd.Series:
 # --------------------------------------------------------------------------- THE (German gas hub)
 THE_URL = "https://api.tradinghub.eu/api/dataexport/xmlexport/PricesEnergyImbalance"
 THE_START = pd.Timestamp("2021-10-01")
+THE_XPATH = "//PricesEnergyImbalance/PricesEnergyImbalance"
+
+
+def parse_the_xml(content: bytes) -> pd.Series:
+    """THE `PricesEnergyImbalance` XML -> daily VTP average price (EUR/MWh) indexed by naive gas day.
+
+    Rows without a price are dropped; a document without the two fields raises ValueError. The gas day is read from the first 10 characters when it is an
+    ISO date/datetime (so a time or UTC offset never moves it to another day).
+    """
+    x = pd.read_xml(io.BytesIO(content), xpath=THE_XPATH)
+    missing = {"Gasday", "VTPDailyAveragePrice"} - set(x.columns)
+    if missing:
+        raise ValueError(f"THE XML without {sorted(missing)}")
+    raw = x["Gasday"].astype(str).str.strip()
+    iso = raw.str.match(r"^\d{4}-\d{2}-\d{2}")
+    day = pd.to_datetime(raw.where(~iso, raw.str.slice(0, 10)), errors="coerce")
+    s = pd.Series(pd.to_numeric(x["VTPDailyAveragePrice"], errors="coerce").to_numpy(),
+                  index=pd.DatetimeIndex(day), name="price")
+    s = s[s.index.notna()].dropna().sort_index()
+    return s[~s.index.duplicated(keep="last")]
 
 
 def gas_from_the(cache_dir: Path, start: pd.Timestamp, end: pd.Timestamp) -> pd.Series:
@@ -168,14 +188,12 @@ def gas_from_the(cache_dir: Path, start: pd.Timestamp, end: pd.Timestamp) -> pd.
         try:
             r = requests.get(THE_URL, params={"startDate": f"{y}-01-01", "endDate": f"{y}-12-31"}, headers=UA, timeout=120)
             r.raise_for_status()
-            x = pd.read_xml(io.BytesIO(r.content), xpath="//PricesEnergyImbalance/PricesEnergyImbalance")
+            s = parse_the_xml(r.content)
         except Exception as exc:
             log.warning("THE gas prices %s failed: %s", y, exc)
             if f.exists():
                 parts.append(pd.read_parquet(f)["price"])
             continue
-        s = pd.Series(pd.to_numeric(x["VTPDailyAveragePrice"], errors="coerce").to_numpy(),
-                      index=pd.to_datetime(x["Gasday"]), name="price").dropna().sort_index()
         s.to_frame().to_parquet(f)
         parts.append(s)
     if not parts:
