@@ -46,9 +46,47 @@ day-ahead, EPEX curves (paid, D-17).
   ETC proxy (not linked statically on eex.com, so it cannot be downloaded automatically).
 
 ## Publication-time check (decision D-16)
-Run `python scripts/check_publication_times.py` at 09:00, 09:45, 10:15, 12:00 and 18:30 on a few days.
-Each run appends to `reports/publication_times.csv` whether tomorrow's forecasts are already published.
+The GitHub workflow `publication-times.yml` runs `python scripts/check_publication_times.py` (no
+arguments = every source, zones BE FR NL DE_LU) around 09:45, 10:15, 10:50, 11:05, 11:15, 12:00 and
+18:30 Brussels. Each run appends one row per series to `reports/publication_times.csv` (kept in the
+GitHub release `pubtimes`; columns `checked_at_local, delivery_day, zone, series, status, n_points`;
+status `available | not_published | empty | error: <Exception>`). Logic: `src/energy_forecast/pubtimes.py`.
 Only series available before the 11:00 issue time (D-29) may be used as same-time features.
+
+| Series (`series` column) | Zone | Delivery day checked | Source |
+|---|---|---|---|
+| `load_forecast (A65)`, `wind_solar_forecast (A69)`, `generation_forecast (A71)`, `day_ahead_prices (A44)` | BE FR NL DE_LU | D+1 | ENTSO-E (needs `ENTSOE_API_KEY`) |
+| `elia_wind_dayahead11h (ods086)`, `elia_solar_dayahead11h (ods087)` | BE | D+1 | Elia near-real-time datasets, field `dayahead11hforecast` (DP-027/028) |
+| `elia_wind_dayahead (ods086)`, `elia_solar_dayahead (ods087)` | BE | D+1 | same datasets, field `dayaheadforecast` (latest run, for comparison) |
+| `the_vtp_daily_price` | DE_THE | gas days today-1 and today | THE daily VTP average price (gas, D-25) |
+| `jao_core_minmax_np` | BE | D+1 | JAO Core final flow-based domain, non-null `minBE` MTUs (DP-040) |
+
+- Elia counts are the number of 15-min timestamps of D+1 (Brussels) with a non-null value, grouped by
+  `datetime` so several region rows per timestamp count once.
+- **Dataset-ID caveat:** the historical Elia datasets (ods031/ods032/ods209) lag ~2 days, so the check
+  uses the near-real-time datasets `ods086` (wind) and `ods087` (solar). These IDs could not be verified
+  from the cloud sandbox and are to be confirmed by the first CI run: a wrong ID shows up as
+  `error: HTTPError` rows (constants `ELIA_WIND_NRT_DATASET` / `ELIA_SOLAR_NRT_DATASET` in `pubtimes.py`).
+- A source that fails (network, missing key, missing package) gets `error: ...` rows; the other sources
+  still run. `--sources entsoe elia the jao` and `--zones` restrict a manual run.
+
+Analysis: `python scripts/check_publication_times.py --summarise [PATH]` (default
+`reports/publication_times.csv`; download the log with `gh release download pubtimes -p publication_times.csv -D reports`)
+prints per (zone, series) the earliest time of day it was `available`, the latest time it was still
+not published, the number of delivery days covered and a verdict vs the cut-off
+(`forecast.issue_hour_local`): `before cut-off` (available at a check before 11:00 on every day with a
+pre-cut-off check), `after cut-off` (ever not published at a check at/after 11:00, or never available
+before it), `mixed` (before the cut-off on some days only — not safe), `insufficient data` (fewer than
+10 days with a pre-cut-off check). Only the check on D-1 for delivery day D counts; for THE gas day G
+the relevant check is the one on G+1 ("is yesterday's gas price known at today's cut-off?"). Error rows
+are ignored. It also writes `reports/publication_times_summary.md` (git-ignored; `--no-md` to skip).
+`--cutoff HH:MM` reads the log against another cut-off (e.g. `--cutoff 11:11`, the time the live job runs).
+
+**Caveat — Elia "day-ahead 11AM" run.** This run is issued *at* 11:00, so under the strict D-16 reading
+("available before 11:00") it is expected to come out `after cut-off`, even though D-29 uses it as the
+wind/solar same-time feature. If the log confirms that, the outcome goes to Henri as a **Proposed**
+decision (e.g. move the cut-off to the live-job time 11:11, or fall back to an earlier run); it must not
+be reinterpreted silently.
 
 ## Known data quirks
 - Pumped storage (and sometimes offshore wind) is left EMPTY by ENTSO-E when it does not generate → treated as 0.

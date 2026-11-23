@@ -6,7 +6,7 @@ History starts with Core flow-based go-live (delivery day 9 Jun 2022). Fetched v
 one request per delivery day, cached per month in data/raw/jao.
 
 Publication: Core final FB parameters are published on D-1 in the morning — the exact time vs
-our 10:00 issue time is still to verify (open question in the inventory). Prefix `fb_` is
+our 11:00 issue time (D-29) is logged by scripts/check_publication_times.py (T52). Prefix `fb_` is
 ignored by features.py until the ablation test (D-15, D-24).
 """
 
