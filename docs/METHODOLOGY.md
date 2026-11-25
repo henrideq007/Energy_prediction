@@ -41,6 +41,17 @@ Why this setup: it is the decision a real market participant faces — "what bid
 7. **Explain** — SHAP values of LightGBM: which drivers move the price.
 8. **Deploy** — train on all history, predict tomorrow with live data, serve via FastAPI.
 
+**EDA (T11).** `python scripts/run_eda.py` runs the descriptive analysis in `src/energy_forecast/eda.py`
+on `dataset_clean.parquet` (in Europe/Brussels local time) and writes `reports/eda/eda_summary.md`
+plus figures in `reports/eda/`: price regimes (pre-crisis 2019 → Jun 2021, crisis Jul 2021 → Jun 2023,
+post-crisis Jul 2023 →; fixed calendar cut points, not estimated change points), hourly profiles by
+season and weekday/weekend, negative prices (per year, hour × month, conditional on the Elia 11AM
+wind/solar forecasts), the merit order (price vs residual load forecast = `load_forecast` − Elia
+11AM wind and solar, with a flagged `fc_*` fallback before Oct 2020) and same-hour correlations with
+the core drivers. Gas statistics use `ttf_gas`, which is not TTF for most of the history (IMF monthly proxy to Sep 2021, THE VTP daily after, D-25); gas–price correlations are reported on daily means from Oct 2021 only. The report opens with the key insights. It is descriptive only: the `fc_*` series it
+mentions remain baseline-only (D-16/D-29), and any driver it suggests still needs an ablation (D-15).
+`notebooks/01_eda.py` uses the same functions interactively.
+
 ## 4. Known limitations / honesty notes
 
 - **Weather in backtests**: the ERA5 archive is *observed* weather, better than any real forecast → backtest slightly optimistic. Switch `weather.source: historical_forecast` (archived forecasts, ~2022+) for a realistic run.
