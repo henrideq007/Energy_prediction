@@ -26,12 +26,12 @@ entsoe:
   chunk_months: 3                  # size of each API request window
   request_sleep_s: 0.5             # be polite with the API
 
-entsoe_extra:                      # Phase 1 candidate data points (D-24): stored, NOT used by features.py yet
+entsoe_extra:                      # Phase 1 candidate data points (D-24): stored, opt-in only (candidate_features, T45)
   enabled: true
   neighbour_zones: [FR, NL, DE_LU] # DP-029..DP-036: load fc, wind/solar fc, generation fc, actual load (+ FR nuclear gen)
   exchange_borders: [FR, NL, DE_LU, GB]   # DP-026: day-ahead scheduled exchanges (auction results -> lag only)
   hydro_reservoir_zones: [FR, CH]  # DP-044: weekly reservoir filling
-  outage_zones: [BE, FR]           # DP-025 / DP-031: unavailable MW as known at D-1 10:00
+  outage_zones: [BE, FR]           # DP-025 / DP-031: unavailable MW as known at the D-1 issue time (11:00, D-29)
 
 weather:
   # archive            -> ERA5 reanalysis (observed weather; optimistic for backtests)
@@ -66,7 +66,7 @@ commodities:
   eua_etc_ticker: "CO2.L"          # D-26: SparkChange EUA ETC (EUR) fills days without an auction report
   coal_ticker: "MTF=F"             # DP-047 candidate: Rotterdam coal (Yahoo; history ends Dec 2025)
   gas_storage_agsi: true           # DP-048 candidate: needs a free AGSI_API_KEY in .env (agsi.gie.eu)
-  publication_lag_days: 2          # close of D-2 is the latest known at D-1 10:00
+  publication_lag_days: 2          # close of D-2 is the latest known at D-1 11:00 (D-29)
 
 elia:
   enabled: true                    # DP-027 / DP-028: Elia wind (ods031) & solar (ods032 + ods209) forecast runs
@@ -83,6 +83,58 @@ forecast:
   horizon_hours: 24
   min_lag_actuals_h: 48            # actual load/generation for D-1 afternoon is NOT known at issue time
   min_lag_prices_h: 24             # D-1 day-ahead prices are known (auction on D-2)
+
+# T45 — candidate feature families (D-24) with leakage-safe publication lags. OFF by default: used only
+# when requested (build_features(candidate_families=[...]) / `backtest --candidates xch nb_actual ...`)
+# for the per-family ablation (D-15). Status of every family: candidate, awaiting ablation.
+# Issue time D-1 11:00 Brussels (D-29) = 13..36 h (37 h on a 25-h day) before delivery hour t.
+# lags_h: 0 = same-time value `<col>`, h > 0 = `<col>_lag<h>` (value at t-h; NaN when t-h is not on a local
+# date before the delivery day, i.e. the last hour of the 25-h DST day for 24 h lags). A lag below the hard floor
+# features.CANDIDATE_MIN_LAG_H raises an error and is flagged by leakage_check(). Neighbour / JAO
+# publication times are not verified yet (T53) -> conservative lags.
+candidate_features:
+  xch:          # DP-026 day-ahead scheduled exchanges + net position: may include intraday renominations -> as actuals
+    rules:
+      - {pattern: '^xch_', lags_h: [48, 168]}
+  nb_actual:    # DP-029..036 neighbour actual load + FR nuclear generation: same rule as BE actuals (D-05)
+    rules:
+      - {pattern: '^nb_.+_(load_actual|gen_nuclear)$', lags_h: [48, 168]}
+  nb_fc:        # neighbour load / wind / solar / generation forecasts: the D-1 forecast is out by ~18:00 D-2;
+                # no same-time use until T53 verifies publication before 11:00
+    rules:
+      - {pattern: '^nb_.+_(load_fc|fc_.+)$', lags_h: [24, 168]}
+  fb:           # DP-040 JAO Core flow-based BE min/max net position (from Jun 2022); same-time pending T53
+    rules:
+      - {pattern: '^fb_BE_(min|max)_np$', lags_h: [24, 168]}
+  unav:         # DP-025/031 nuclear unavailable MW, already rebuilt as known at the issue time (D-27)
+    rules:
+      - {pattern: '^unav_.+_nuclear_mw$', lags_h: [0]}
+    valid_from:                    # NaN before this local date: no ENTSO-E BE message before 2022, 0 = unknown
+      unav_BE_nuclear_mw: "2022-01-01"   # all-zero before; first non-zero 2022-01-27 (see METHODOLOGY T45)
+    proxies: [nuc_BE_gap_proxy_lag48]    # cap_BE_nuclear - gen_nuclear(t-48 h), full history
+  cap:          # DP-024 yearly installed capacity, published before the year (values may be revised afterwards)
+    rules:
+      - {pattern: '^cap_BE_', lags_h: [0]}
+  hydro_res:    # DP-044 weekly reservoir filling, stamped Monday 00:00 of week W, ffilled; out the week after.
+                # Assumed out by the end of the Thursday after W -> worst-case safe lag 302 h
+                # (features.hydro_min_safe_lag_h; exact 290 h for Monday stamps); 336 h = 14 days, >= 34 h margin
+    rules:
+      - {pattern: '^hydro_res_.+_mwh$', lags_h: [336]}
+  wfr:          # DP-043 Open-Meteo France temperature: same treatment as the w_ weather columns
+    rules:
+      - {pattern: '^wfr_', lags_h: [0]}
+  elia_other:   # DP-027/028 Elia runs other than the 11AM run (which is already a feature, D-29)
+    rules:
+      - {pattern: '^elia_(wind|solar)_weekaheadforecast$', lags_h: [24]}    # same-time pending T53 (publication time unverified, D-16)
+      - {pattern: '^elia_(wind|solar)_dayaheadforecast$', lags_h: [24]}     # latest DA run, after 11:00 D-1
+      - {pattern: '^elia_(wind|solar)_measured$', lags_h: [48, 168]}        # estimated actuals
+  cmd:          # DP-047 coal: closes already shifted by publication_lag_days (D-2 close); history ends Jan 2026
+                # (NaN after) - the ablation decides. DP-048 AGSI gas storage (only with AGSI_API_KEY): gas day X
+                # is out ~18:00 CET on X+1 and revised later, but stamped X+2 00:00 UTC -> lag 48 h (floor 48)
+    rules:
+      - {pattern: '^cmd_coal', lags_h: [0]}
+      - {pattern: '^cmd_gas_storage', lags_h: [48]}
+  # flag_* columns: never a feature (leakage_check)
 
 targets:
   price: price_da
