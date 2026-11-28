@@ -35,7 +35,10 @@ def _models_for(cfg: Config, target: str, override: list[str] | None) -> list[st
 
 
 def run_backtest(cfg: Config, df: pd.DataFrame, targets: list[str] | None = None, models: list[str] | None = None,
-                 n_folds: int | None = None, data_tag: str = "real") -> pd.DataFrame:
+                 n_folds: int | None = None, data_tag: str = "real",
+                 candidate_families: list[str] | None = None) -> pd.DataFrame:
+    """`candidate_families` (T45, opt-in): add these candidate families (config `candidate_features`)
+    to X — for the D-15 ablation. None = default feature set."""
     tz = cfg.tz
     fc = cfg["forecast"]
     bt = cfg["split"]["backtest"]
@@ -45,7 +48,8 @@ def run_backtest(cfg: Config, df: pd.DataFrame, targets: list[str] | None = None
     fold_rows, board_rows = [], []
 
     for target in targets:
-        X, y = make_xy(df, target, tz=tz, min_lag_actuals=fc["min_lag_actuals_h"], min_lag_prices=fc["min_lag_prices_h"])
+        X, y = make_xy(df, target, tz=tz, min_lag_actuals=fc["min_lag_actuals_h"], min_lag_prices=fc["min_lag_prices_h"],
+                       candidate_families=candidate_families, candidate_policy=cfg.get("candidate_features"))
         bad = leakage_check(X)
         assert not bad, f"Leakage risk, same-time actual columns in features: {bad}"
         preds = pd.DataFrame({"y": y})
@@ -82,18 +86,21 @@ def run_backtest(cfg: Config, df: pd.DataFrame, targets: list[str] | None = None
     board = pd.DataFrame(board_rows).sort_values(["target", "MAE"])
     folds_df.to_csv(reports / "backtest_fold_metrics.csv", index=False)
     board.to_csv(reports / "leaderboard.csv", index=False)
-    (reports / "leaderboard.md").write_text(_board_md(board, run_id, data_tag), encoding="utf-8")
+    (reports / "leaderboard.md").write_text(_board_md(board, run_id, data_tag, candidate_families), encoding="utf-8")
+    extra = {"candidates": list(candidate_families)} if candidate_families else {}
     with open(reports / "experiments.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({"run_id": run_id, "utc": datetime.now(timezone.utc).isoformat(), "data": data_tag,
-                            "folds": len(folds), "first_test_month": bt["first_test_month"],
+                            "folds": len(folds), "first_test_month": bt["first_test_month"], **extra,
                             "leaderboard": board.round(4).to_dict(orient="records")}) + "\n")
     return board
 
 
-def _board_md(board: pd.DataFrame, run_id: str, data_tag: str) -> str:
+def _board_md(board: pd.DataFrame, run_id: str, data_tag: str, candidates: list[str] | None = None) -> str:
     lines = [f"# Backtest leaderboard — run `{run_id}` (data: {data_tag})", "",
-             "Walk-forward, expanding window, monthly folds. Lower MAE/RMSE/rMAE is better; "
-             "rMAE < 1 means the model beats the weekly seasonal-naive baseline.", ""]
+             ("Walk-forward, expanding window, monthly folds. Lower MAE/RMSE/rMAE is better; "
+              "rMAE < 1 means the model beats the weekly seasonal-naive baseline."), ""]
+    if candidates:
+        lines += [f"Candidate feature families (T45, ablation): {', '.join(candidates)}", ""]
     for target, g in board.groupby("target", sort=False):
         lines += [f"## {target}", "", "| model | MAE | RMSE | rMAE | sMAPE % | DirAcc | PeakHit |", "|---|---|---|---|---|---|---|"]
         for _, r in g.iterrows():

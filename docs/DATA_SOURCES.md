@@ -19,6 +19,13 @@ All sources are free. Everything is downloaded by `python -m energy_forecast -v 
 
 ## Candidate sources (collected, NOT used by `features.py` until an ablation test — D-15, D-24)
 
+Opt-in only: `features.candidate_features` (T45) adds them, per family, with the publication lags of
+`config.yaml > candidate_features` (e.g. `xch_*` and `nb_*_load_actual` lag ≥ 48 h, `nb_*` forecasts and `fb_*`
+lag ≥ 24 h, Elia week-ahead run lag 24 h until its publication time is verified, AGSI gas storage lag 48 h,
+`hydro_res_*` lag 336 h, `unav_BE_nuclear_mw` NaN before 2022). `cap_BE_*` yearly values can be revised
+after the fact. Policy table:
+`docs/METHODOLOGY.md` § "Candidate features & publication lags (T45)".
+
 | Source | Data | Columns |
 |---|---|---|
 | ENTSO-E (FR, NL, DE-LU) | Load forecast & actual, wind/solar forecast, generation forecast, FR nuclear generation (DP-029..036) | `nb_<zone>_*` |

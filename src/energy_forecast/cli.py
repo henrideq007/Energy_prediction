@@ -54,7 +54,7 @@ def cmd_backtest(cfg: Config, a) -> None:
     from energy_forecast.backtest import run_backtest
 
     board = run_backtest(cfg, _clean_dataset(cfg), targets=a.targets, models=a.models, n_folds=a.folds,
-                         data_tag=getattr(a, "data_tag", "real"))
+                         data_tag=getattr(a, "data_tag", "real"), candidate_families=getattr(a, "candidates", None))
     print((cfg.path("reports_dir") / "leaderboard.md").read_text(encoding="utf-8"))
     return board
 
@@ -117,6 +117,9 @@ def main(argv: list[str] | None = None) -> None:
     for name in ("backtest", "demo"):
         s = sub.add_parser(name)
         s.add_argument("--targets", nargs="+"); s.add_argument("--models", nargs="+"); s.add_argument("--folds", type=int)
+        if name == "backtest":  # T45: opt-in candidate families (config candidate_features) for the D-15 ablation
+            s.add_argument("--candidates", nargs="+", metavar="FAMILY",
+                           help="add candidate feature families, e.g. xch nb_actual unav (config: candidate_features)")
     s = sub.add_parser("train"); s.add_argument("--targets", nargs="+"); s.add_argument("--model")
     s = sub.add_parser("predict"); s.add_argument("--date", help="delivery day YYYY-MM-DD (default: tomorrow)")
     s = sub.add_parser("explain"); s.add_argument("--target")

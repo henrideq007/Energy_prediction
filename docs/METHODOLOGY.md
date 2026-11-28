@@ -26,6 +26,58 @@ Why this setup: it is the decision a real market participant faces — "what bid
 
 `features.leakage_check()` and the unit tests enforce these rules on every run.
 
+### Candidate features & publication lags (T45)
+
+The Phase 1 candidate columns (D-24) are **not** in the default feature matrix. `features.candidate_features()`
+builds them on request — `build_features(..., candidate_families=[...])` or
+`energy-forecast backtest --candidates xch nb_actual ...` — with the lags of `config.yaml > candidate_features`.
+For delivery hour t on day D the issue time D-1 11:00 lies 13 h (t = D 00:00) to 36 h (t = D 23:00; 37 h on
+a 25-h day) before t. A lag h means the feature at t is the source value at t−h (column `<col>_lag<h>`);
+lag 0 keeps `<col>`. `features.CANDIDATE_MIN_LAG_H` is a hard floor, independent of the config: a shorter
+lag raises an error and `leakage_check()` flags any candidate column without its lag. Lagged candidate
+values whose source hour t−h is not on a local date strictly before the delivery day are set to NaN (DST,
+see below). Neighbour, Elia week-ahead, AGSI and JAO
+publication times are not verified yet (T53), hence the conservative choices. Status of every family:
+**candidate — awaiting ablation (D-15)**.
+
+| Family | Columns | Lags (h) | Rationale |
+|---|---|---|---|
+| `xch` | `xch_*` (DA scheduled exchanges, BE net position) | 48, 168 | may include intraday renominations → treated like actuals (D-05) |
+| `nb_actual` | `nb_*_load_actual`, `nb_FR_gen_nuclear` | 48, 168 | same rule as BE actuals (D-05) |
+| `nb_fc` | `nb_*_load_fc`, `nb_*_fc_*` | 24, 168 | forecast for D-1 is out by ~18:00 D-2; same-time only once T53 verifies publication < 11:00 |
+| `fb` | `fb_BE_min_np`, `fb_BE_max_np` (JAO, from Jun 2022) | 24, 168 | same-time pending T53 |
+| `unav` | `unav_*_nuclear_mw` + `nuc_BE_gap_proxy_lag48` | 0 (proxy: 48) | already rebuilt as known at the issue time (D-27). BE masked to NaN before 2022-01-01 (see below) |
+| `cap` | `cap_BE_*` | 0 | yearly installed capacity, published before the year. Yearly values can be revised after the fact on ENTSO-E (the stored value is the latest, not necessarily the one known then) |
+| `hydro_res` | `hydro_res_FR_mwh`, `hydro_res_CH_mwh` | 336 | weekly, see below |
+| `wfr` | `wfr_<city>_temperature_2m` | 0 | weather, same treatment as `w_*` (same ERA5 optimism) |
+| `elia_other` | `elia_*_weekaheadforecast` / `elia_*_dayaheadforecast` / `elia_*_measured` | 24 / 24 / 48, 168 | week-ahead: publication time unverified (D-16) → same-time pending T53/verification; latest DA run published after 11:00; measured = actuals |
+| `cmd` | `cmd_coal_api2` / `cmd_gas_storage_eu_pct` (AGSI, only with `AGSI_API_KEY`) | 0 / 48 | coal: closes already shifted by `commodities.publication_lag_days` (D-2 close), history ends Jan 2026. AGSI: gas day X is published ~18:00 CET on X+1 and revised later, but stamped X+2 00:00 UTC → lag 0 would use D-2 (published after the issue time) → lag 48 (floor 48) |
+| — | `flag_*` | never | data-quality flags, never a feature |
+
+**Hydro reservoirs.** The weekly value of week W is forward-filled from its stamp. Observed stamps
+(Brussels time): FR Monday 01:00 ×210, Monday 00:00 ×175, Sunday 23:00 ×19; CH Monday 01:00 ×243,
+Monday 00:00 ×164 — i.e. mostly Sunday 23:00 UTC; the earliest is Sunday 23:00 local, 1 h before Monday
+00:00. Assumption: published at the latest at the end of the Thursday after W ends (Monday 00:00 of W +
+264 h). Worst case, the first row using a value is the last hour of its day (issue = t − 37 h), so
+h ≥ 264 + 1 + 37 = **302 h** (`features.hydro_min_safe_lag_h`), valid for any stamp from Sunday 23:00 on.
+Simulated hour by hour over 2024–2025 with stamps at Sunday 23:00 / Monday 00:00 / Monday 01:00, the exact
+minimum is 290 h. We use **336 h** (14 days).
+
+**BE nuclear unavailability.** ENTSO-E has no BE outage messages before 2022, so `unav_BE_nuclear_mw` is
+exactly 0 for every hour of 2019–2021: 0 means "unknown", not "no outage". It is set to NaN before
+2022-01-01 (`valid_from`; first non-zero value: 2022-01-27; January 2022 zeros are consistent with
+capacity − generation ≈ 0). Caveat: the series still looks under-recorded in H1 2022 (e.g.
+Feb–Mar 2022: capacity − generation ≈ 1 GW while `unav_BE` ≈ 0; quarterly correlation 0.14 in Q1 2022 vs
+0.8–0.98 in most later quarters), possibly outages announced before the first stored message — to be
+checked on the raw messages (data side). `nuc_BE_gap_proxy_lag48 = cap_BE_nuclear − gen_nuclear(t−48 h)` covers the full
+history; it also absorbs modulation and closures within a year (capacity is yearly).
+
+**DST note.** Lags are row shifts on the UTC grid. On the 25-h autumn day, 23:00 − 24 h is 00:00 of the
+same day D, which is not known at the D-1 issue time. For candidate features this is **handled by masking**:
+`candidate_features()` sets a lagged value to NaN whenever the local date of t − h is not strictly before
+the delivery date of t (1 row per year for 24 h lags, none for 48/168/336 h; tested hour by hour over 2025).
+The default feature `price_da_lag24` is still affected (1 h/year) — follow-up, not changed here.
+
 ## 3. Pipeline
 
 1. **Collect** — `energy-forecast fetch` → ENTSO-E (prices, load, generation, TSO forecasts), Open-Meteo (weather), Yahoo Finance (TTF), optional EUA CSV.
